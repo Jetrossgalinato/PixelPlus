@@ -1,16 +1,17 @@
 "use client";
 import Image from "next/image";
 
-import { Loader2, ArrowLeft, Wand2, Download, RotateCcw } from "lucide-react";
+import { Loader2, ArrowLeft, Download, RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import GrayscaleTool from "../components/GrayscaleTool";
 import { useImage } from "../ImageContext";
 
 export default function EditPage() {
-  const [exportDropdown, setExportDropdown] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const router = useRouter();
   const { image } = useImage();
-  const [processing, setProcessing] = useState(false);
+  const [processing] = useState(false); // retained for future multi-tool orchestration
   const [result, setResult] = useState<string | null>(null);
   const prevResultUrl = useRef<string | null>(null);
   const [undoStack, setUndoStack] = useState<string[]>([]);
@@ -71,84 +72,32 @@ export default function EditPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, undoStack]);
   // Removed unused showComparison for performance cleanliness
-  const abortRef = useRef<AbortController | null>(null);
-  const [hash, setHash] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(null);
 
-  // Editing options
-  async function computeHash(file: File): Promise<string> {
-    const buf = await file.arrayBuffer();
-    const digest = await crypto.subtle.digest("SHA-256", buf);
-    return Array.from(new Uint8Array(digest))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-  }
-
-  const handleGrayscale = async () => {
-    if (!image.file) return;
-    setError(null);
-    // Hash original once
-    let h = hash;
-    if (!h) {
-      h = await computeHash(image.file);
-      setHash(h);
-    }
-    const cacheKey = `pixelplus-cache-${h}-grayscale`;
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) {
-      // Use cached without network
-      setUndoStack((stack) =>
-        result ? stack : image.dataUrl ? [image.dataUrl] : stack
-      );
-      setResult(cached);
-      return;
-    }
-    // Abort any in-flight request
-    if (abortRef.current) abortRef.current.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setProcessing(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", image.file);
-      const res = await fetch("http://localhost:8000/grayscale/?format=png", {
-        method: "POST",
-        body: formData,
-        signal: controller.signal,
-        headers: { "X-Image-Hash": h },
-      });
-      if (!res.ok) throw new Error(`Failed (${res.status})`);
-      const blob = await res.blob();
-      if (prevResultUrl.current) URL.revokeObjectURL(prevResultUrl.current);
-      const url = URL.createObjectURL(blob);
-      prevResultUrl.current = url;
-      if (!result && image.dataUrl) setUndoStack([image.dataUrl]);
+  // Receive grayscale result from tool component
+  const handleGrayscaleResult = useCallback(
+    (url: string, originalForUndo?: string) => {
+      if (!result && originalForUndo) setUndoStack([originalForUndo]);
       setResult(url);
-      // Persist data URL for caching
-      const dataUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(blob);
-      });
-      safeSetItem(cacheKey, dataUrl);
-    } catch (e: unknown) {
-      const abort =
-        typeof e === "object" &&
-        e !== null &&
-        "name" in (e as Record<string, unknown>) &&
-        (e as Record<string, unknown>).name === "AbortError";
-      if (!abort) setError("Error processing image");
-    } finally {
-      setProcessing(false);
+    },
+    [result]
+  );
+
+  // Back to default (original) handler
+  const handleBackToDefault = () => {
+    if (undoStack.length > 0) {
+      setResult(undoStack[0]);
+      setUndoStack([]);
+    } else if (image.dataUrl) {
+      setResult(null); // will show original placeholder
     }
   };
 
   // Cleanup object URL on unmount
   useEffect(() => {
+    const urlAtMount = prevResultUrl.current;
     return () => {
-      if (prevResultUrl.current) {
-        URL.revokeObjectURL(prevResultUrl.current);
-      }
+      if (urlAtMount) URL.revokeObjectURL(urlAtMount);
     };
   }, []);
 
@@ -177,7 +126,7 @@ export default function EditPage() {
       link.download = `edited.${type}`;
       link.click();
     }
-    // no-op: removed comparison feature for performance
+    // keep modal open so user can export multiple formats; optional: auto-close
   };
 
   return (
@@ -191,124 +140,61 @@ export default function EditPage() {
         <ArrowLeft className="w-5 h-5" /> Back to Upload
       </button>
 
-      {/* Export dropdown top right */}
+      {/* Export button triggers modal */}
       <div style={{ position: "absolute", top: 24, right: 24, zIndex: 20 }}>
         <button
           className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition disabled:opacity-50"
-          onClick={() => setExportDropdown((v) => !v)}
+          onClick={() => setShowExportModal(true)}
           disabled={!result}
         >
           <Download className="w-4 h-4" /> Export
         </button>
-        {exportDropdown && (
-          <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg flex flex-col">
-            <button
-              className="px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
-              onClick={() => {
-                handleExport("png");
-                setExportDropdown(false);
-              }}
-              disabled={!result}
-            >
-              Export to PNG
-            </button>
-            <button
-              className="px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
-              onClick={() => {
-                handleExport("jpg");
-                setExportDropdown(false);
-              }}
-              disabled={!result}
-            >
-              Export to JPG
-            </button>
-            <button
-              className="px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
-              onClick={() => {
-                handleExport("pdf");
-                setExportDropdown(false);
-              }}
-              disabled={!result}
-            >
-              Export to PDF
-            </button>
-          </div>
-        )}
       </div>
       <h1 className="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-gray-100 self-center">
         Edit Image
       </h1>
-      {/* Always show editing split view */}
-      <div className="flex flex-row gap-8 w-full max-w-4xl self-center mt-8">
-        <div className="flex-1 flex flex-col items-center">
-          <h2 className="mb-2 text-lg font-semibold text-gray-700 dark:text-gray-200">
-            Original
-          </h2>
-          {image.dataUrl ? (
-            <Image
-              src={image.dataUrl}
-              alt="Original"
-              width={1400}
-              height={1400}
-              unoptimized
-              className="rounded-lg shadow max-h-[1400px] object-contain border border-gray-200 dark:border-gray-700"
-            />
-          ) : (
-            <div className="w-full h-64 flex items-center justify-center text-gray-400">
-              No image
-            </div>
-          )}
-        </div>
-        <div className="flex-1 flex flex-col items-center">
-          <h2 className="mb-2 text-lg font-semibold text-gray-700 dark:text-gray-200">
-            Edit Preview
-          </h2>
-          {result ? (
-            <Image
-              src={result}
-              alt="Edited"
-              width={1400}
-              height={1400}
-              unoptimized
-              className="rounded-lg shadow max-h-[1400px] object-contain border border-gray-200 dark:border-gray-700"
-            />
-          ) : image.dataUrl ? (
-            <Image
-              src={image.dataUrl}
-              alt="Preview"
-              width={1400}
-              height={1400}
-              unoptimized
-              className="rounded-lg shadow max-h-[1400px] object-contain border border-gray-200 dark:border-gray-700 opacity-50"
-            />
-          ) : (
-            <div className="w-full h-64 flex items-center justify-center text-gray-400">
-              No image
-            </div>
-          )}
-        </div>
+      {/* Single large edit preview */}
+      <div className="flex flex-col items-center w-full max-w-4xl self-center mt-8">
+        <h2 className="mb-2 text-lg font-semibold text-gray-700 dark:text-gray-200">
+          Edit Preview
+        </h2>
+        {result ? (
+          <Image
+            src={result}
+            alt="Edited"
+            width={1400}
+            height={1400}
+            unoptimized
+            className="rounded-lg shadow max-h-[1400px] object-contain border border-gray-200 dark:border-gray-700"
+          />
+        ) : image.dataUrl ? (
+          <Image
+            src={image.dataUrl}
+            alt="Preview"
+            width={1400}
+            height={1400}
+            unoptimized
+            className="rounded-lg shadow max-h-[1400px] object-contain border border-gray-200 dark:border-gray-700 opacity-50"
+          />
+        ) : (
+          <div className="w-full h-64 flex items-center justify-center text-gray-400">
+            No image
+          </div>
+        )}
       </div>
       {/* Show comparison only after export - removed as requested */}
       {/* Editing options bar */}
-      <div className="flex flex-row gap-4 justify-center items-center mt-10 mb-2 self-center relative">
-        <button
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition disabled:opacity-50"
-          onClick={handleGrayscale}
-          disabled={processing || !image.file}
-        >
-          <Wand2 className="w-4 h-4" />
-          {processing ? <Loader2 className="animate-spin w-4 h-4" /> : null}
-          Grayscale
-        </button>
+      <div className="flex flex-row flex-wrap gap-4 justify-center items-center mt-10 mb-2 self-center relative">
+        <GrayscaleTool
+          imageFile={image.file}
+          originalDataUrl={image.dataUrl}
+          onResult={handleGrayscaleResult}
+          disabled={processing}
+        />
         <button
           className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50"
-          onClick={() => {
-            if (undoStack.length > 0) {
-              setResult(undoStack[0]);
-              setUndoStack([]);
-            }
-          }}
-          disabled={undoStack.length === 0}
+          onClick={handleBackToDefault}
+          disabled={!result}
         >
           <RotateCcw className="w-4 h-4" /> Undo
         </button>
@@ -325,6 +211,100 @@ export default function EditPage() {
       )}
       {error && (
         <div className="mt-2 text-xs text-red-500 self-center">{error}</div>
+      )}
+
+      {showExportModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Export comparison"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setShowExportModal(false);
+          }}
+        >
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-6xl w-full p-6 relative">
+            <button
+              onClick={() => setShowExportModal(false)}
+              className="absolute top-3 right-3 text-sm text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
+              aria-label="Close export modal"
+            >
+              ✕
+            </button>
+            <h3 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100">
+              Export & Comparison
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="flex flex-col items-center">
+                <h4 className="mb-2 font-medium text-gray-600 dark:text-gray-300">
+                  Original
+                </h4>
+                {image.dataUrl ? (
+                  <Image
+                    src={image.dataUrl}
+                    alt="Original"
+                    width={800}
+                    height={800}
+                    unoptimized
+                    className="rounded border border-gray-200 dark:border-gray-700 object-contain max-h-[600px]"
+                  />
+                ) : (
+                  <div className="w-full h-40 flex items-center justify-center text-gray-400">
+                    No image
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col items-center">
+                <h4 className="mb-2 font-medium text-gray-600 dark:text-gray-300">
+                  Edited
+                </h4>
+                {result ? (
+                  <Image
+                    src={result}
+                    alt="Edited"
+                    width={800}
+                    height={800}
+                    unoptimized
+                    className="rounded border border-gray-200 dark:border-gray-700 object-contain max-h-[600px]"
+                  />
+                ) : (
+                  <div className="w-full h-40 flex items-center justify-center text-gray-400">
+                    No edit preview
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 justify-end">
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 disabled:opacity-50"
+                onClick={() => handleExport("png")}
+                disabled={!result}
+              >
+                Download PNG
+              </button>
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 disabled:opacity-50"
+                onClick={() => handleExport("jpg")}
+                disabled={!result}
+              >
+                Download JPG
+              </button>
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 disabled:opacity-50"
+                onClick={() => handleExport("pdf")}
+                disabled={!result}
+              >
+                Download PDF
+              </button>
+              <button
+                className="px-4 py-2 bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded shadow hover:bg-gray-400 dark:hover:bg-gray-600"
+                onClick={() => setShowExportModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
