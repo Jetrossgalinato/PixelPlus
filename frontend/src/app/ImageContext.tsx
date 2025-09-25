@@ -66,12 +66,17 @@ export function ImageProvider({ children }: { children: React.ReactNode }) {
   const setImage = useCallback((img: UploadedImage) => {
     setImageState(img);
     if (img.dataUrl && img.fileName) {
+      // If a new image is selected, clear edit preview and undo stack
       localStorage.setItem(
         "pixelplus-image",
         JSON.stringify({ dataUrl: img.dataUrl, fileName: img.fileName })
       );
+      localStorage.removeItem("pixelplus-edit-preview");
+      localStorage.removeItem("pixelplus-edit-undo");
     } else {
       localStorage.removeItem("pixelplus-image");
+      localStorage.removeItem("pixelplus-edit-preview");
+      localStorage.removeItem("pixelplus-edit-undo");
     }
   }, []);
 

@@ -12,6 +12,7 @@ export default function EditPage() {
   const { image } = useImage();
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [undoStack, setUndoStack] = useState<string[]>([]);
 
   // Restore edit preview from localStorage on mount
   useEffect(() => {
@@ -19,16 +20,19 @@ export default function EditPage() {
     if (saved) {
       setResult(saved);
     }
-  }, []);
+    // Always start with empty undo stack on mount (or new image)
+    setUndoStack([]);
+  }, [image.dataUrl, image.fileName]);
 
-  // Persist edit preview to localStorage when it changes
+  // Persist edit preview and undo stack to localStorage when they change
   useEffect(() => {
     if (result) {
       localStorage.setItem("pixelplus-edit-preview", result);
     } else {
       localStorage.removeItem("pixelplus-edit-preview");
     }
-  }, [result]);
+    localStorage.setItem("pixelplus-edit-undo", JSON.stringify(undoStack));
+  }, [result, undoStack]);
   const [showComparison, setShowComparison] = useState(false);
 
   // Editing options
@@ -47,6 +51,10 @@ export default function EditPage() {
       if (!res.ok) throw new Error("Failed to process image");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
+      // Only allow undo to the original image
+      if (!result && image.dataUrl) {
+        setUndoStack([image.dataUrl]);
+      }
       setResult(url);
     } catch (err) {
       alert("Error processing image");
@@ -151,10 +159,10 @@ export default function EditPage() {
             <Image
               src={image.dataUrl}
               alt="Original"
-              width={384}
-              height={384}
+              width={1400}
+              height={1400}
               unoptimized
-              className="rounded-lg shadow max-h-96 object-contain border border-gray-200 dark:border-gray-700"
+              className="rounded-lg shadow max-h-[1400px] object-contain border border-gray-200 dark:border-gray-700"
             />
           ) : (
             <div className="w-full h-64 flex items-center justify-center text-gray-400">
@@ -170,19 +178,19 @@ export default function EditPage() {
             <Image
               src={result}
               alt="Edited"
-              width={384}
-              height={384}
+              width={1400}
+              height={1400}
               unoptimized
-              className="rounded-lg shadow max-h-96 object-contain border border-gray-200 dark:border-gray-700"
+              className="rounded-lg shadow max-h-[1400px] object-contain border border-gray-200 dark:border-gray-700"
             />
           ) : image.dataUrl ? (
             <Image
               src={image.dataUrl}
               alt="Preview"
-              width={384}
-              height={384}
+              width={1400}
+              height={1400}
               unoptimized
-              className="rounded-lg shadow max-h-96 object-contain border border-gray-200 dark:border-gray-700 opacity-50"
+              className="rounded-lg shadow max-h-[1400px] object-contain border border-gray-200 dark:border-gray-700 opacity-50"
             />
           ) : (
             <div className="w-full h-64 flex items-center justify-center text-gray-400">
@@ -202,6 +210,18 @@ export default function EditPage() {
           <Wand2 className="w-4 h-4" />
           {processing ? <Loader2 className="animate-spin w-4 h-4" /> : null}
           Grayscale
+        </button>
+        <button
+          className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50"
+          onClick={() => {
+            if (undoStack.length > 0) {
+              setResult(undoStack[0]);
+              setUndoStack([]);
+            }
+          }}
+          disabled={undoStack.length === 0}
+        >
+          Undo
         </button>
       </div>
       {!image.file && (
