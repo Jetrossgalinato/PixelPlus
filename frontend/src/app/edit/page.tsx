@@ -1,9 +1,9 @@
 "use client";
 import Image from "next/image";
 
-import { Loader2, ArrowLeft, Wand2, Download } from "lucide-react";
+import { Loader2, ArrowLeft, Wand2, Download, RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useImage } from "../ImageContext";
 
 export default function EditPage() {
@@ -12,6 +12,7 @@ export default function EditPage() {
   const { image } = useImage();
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const prevResultUrl = useRef<string | null>(null);
   const [undoStack, setUndoStack] = useState<string[]>([]);
 
   // Restore edit preview from localStorage on mount
@@ -24,44 +25,132 @@ export default function EditPage() {
     setUndoStack([]);
   }, [image.dataUrl, image.fileName]);
 
-  // Persist edit preview and undo stack to localStorage when they change
+  // Persist edit preview and undo stack to localStorage when they change (guarded)
+  // Safe storage helpers (avoid quota errors with large images)
+  const MAX_ITEM_BYTES = 2_500_000; // ~2.5MB max per item
+  const GRAYSCALE_PREFIX = "pixelplus-cache-";
+  function approximateSize(str: string) {
+    return str.length * 2; // conservative (UTF-16)
+  }
+  // stable helper (won't change across renders)
+  function safeSetItem(key: string, value: string) {
+    if (approximateSize(value) > MAX_ITEM_BYTES) {
+      console.warn("PixelPlus: item too large to cache", key);
+      return;
+    }
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      try {
+        // Evict half of grayscale cache entries (simple heuristic) then retry
+        const keys = Object.keys(localStorage).filter((k) =>
+          k.startsWith(GRAYSCALE_PREFIX)
+        );
+        for (let i = 0; i < Math.ceil(keys.length / 2); i++) {
+          localStorage.removeItem(keys[i]);
+        }
+        localStorage.setItem(key, value);
+      } catch (err) {
+        console.warn("PixelPlus: failed to cache after eviction", err);
+      }
+    }
+  }
   useEffect(() => {
     if (result) {
-      localStorage.setItem("pixelplus-edit-preview", result);
+      safeSetItem("pixelplus-edit-preview", result);
     } else {
       localStorage.removeItem("pixelplus-edit-preview");
     }
-    localStorage.setItem("pixelplus-edit-undo", JSON.stringify(undoStack));
+    // undo stack is tiny; store normally
+    try {
+      localStorage.setItem("pixelplus-edit-undo", JSON.stringify(undoStack));
+    } catch {
+      /* ignore */
+    }
+    // safeSetItem is stable; exhaustive-deps not required
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, undoStack]);
-  const [showComparison, setShowComparison] = useState(false);
+  // Removed unused showComparison for performance cleanliness
+  const abortRef = useRef<AbortController | null>(null);
+  const [hash, setHash] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Editing options
+  async function computeHash(file: File): Promise<string> {
+    const buf = await file.arrayBuffer();
+    const digest = await crypto.subtle.digest("SHA-256", buf);
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
   const handleGrayscale = async () => {
     if (!image.file) return;
+    setError(null);
+    // Hash original once
+    let h = hash;
+    if (!h) {
+      h = await computeHash(image.file);
+      setHash(h);
+    }
+    const cacheKey = `pixelplus-cache-${h}-grayscale`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      // Use cached without network
+      setUndoStack((stack) =>
+        result ? stack : image.dataUrl ? [image.dataUrl] : stack
+      );
+      setResult(cached);
+      return;
+    }
+    // Abort any in-flight request
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setProcessing(true);
-    setResult(null);
-    setShowComparison(false);
-    const formData = new FormData();
-    formData.append("file", image.file);
     try {
-      const res = await fetch("http://localhost:8000/grayscale/", {
+      const formData = new FormData();
+      formData.append("file", image.file);
+      const res = await fetch("http://localhost:8000/grayscale/?format=png", {
         method: "POST",
         body: formData,
+        signal: controller.signal,
+        headers: { "X-Image-Hash": h },
       });
-      if (!res.ok) throw new Error("Failed to process image");
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
       const blob = await res.blob();
+      if (prevResultUrl.current) URL.revokeObjectURL(prevResultUrl.current);
       const url = URL.createObjectURL(blob);
-      // Only allow undo to the original image
-      if (!result && image.dataUrl) {
-        setUndoStack([image.dataUrl]);
-      }
+      prevResultUrl.current = url;
+      if (!result && image.dataUrl) setUndoStack([image.dataUrl]);
       setResult(url);
-    } catch (err) {
-      alert("Error processing image");
+      // Persist data URL for caching
+      const dataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+      safeSetItem(cacheKey, dataUrl);
+    } catch (e: unknown) {
+      const abort =
+        typeof e === "object" &&
+        e !== null &&
+        "name" in (e as Record<string, unknown>) &&
+        (e as Record<string, unknown>).name === "AbortError";
+      if (!abort) setError("Error processing image");
     } finally {
       setProcessing(false);
     }
   };
+
+  // Cleanup object URL on unmount
+  useEffect(() => {
+    return () => {
+      if (prevResultUrl.current) {
+        URL.revokeObjectURL(prevResultUrl.current);
+      }
+    };
+  }, []);
 
   // Export handlers
   const handleExport = (type: "png" | "jpg" | "pdf") => {
@@ -88,7 +177,7 @@ export default function EditPage() {
       link.download = `edited.${type}`;
       link.click();
     }
-    setShowComparison(true);
+    // no-op: removed comparison feature for performance
   };
 
   return (
@@ -201,7 +290,7 @@ export default function EditPage() {
       </div>
       {/* Show comparison only after export - removed as requested */}
       {/* Editing options bar */}
-      <div className="flex flex-row gap-4 justify-center items-center mt-10 mb-2 self-center">
+      <div className="flex flex-row gap-4 justify-center items-center mt-10 mb-2 self-center relative">
         <button
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition disabled:opacity-50"
           onClick={handleGrayscale}
@@ -221,13 +310,21 @@ export default function EditPage() {
           }}
           disabled={undoStack.length === 0}
         >
-          Undo
+          <RotateCcw className="w-4 h-4" /> Undo
         </button>
+        {processing && (
+          <div className="absolute -bottom-8 text-xs text-gray-500 flex items-center gap-1">
+            <Loader2 className="w-3 h-3 animate-spin" /> Processing...
+          </div>
+        )}
       </div>
       {!image.file && (
         <div className="mt-2 text-xs text-red-500 self-center">
           Image not ready for processing. Try re-uploading.
         </div>
+      )}
+      {error && (
+        <div className="mt-2 text-xs text-red-500 self-center">{error}</div>
       )}
     </div>
   );
