@@ -1,15 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { UploadCloud, Loader2 } from "lucide-react";
+import { useRef } from "react";
+import { UploadCloud } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useImage } from "./ImageContext";
 
 export default function HomePage() {
-  const [image, setImage] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string>("");
-  const [file, setFile] = useState<File | null>(null);
-  const [processing, setProcessing] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+  const { setImage } = useImage();
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -19,34 +18,16 @@ export default function HomePage() {
   };
 
   const handleFile = (file: File) => {
-    setFileName(file.name);
-    setFile(file);
     const reader = new FileReader();
     reader.onload = (e) => {
-      setImage(e.target?.result as string);
+      setImage({
+        file,
+        dataUrl: e.target?.result as string,
+        fileName: file.name,
+      });
+      router.push("/edit");
     };
     reader.readAsDataURL(file);
-  };
-
-  const handleProcess = async () => {
-    if (!file) return;
-    setProcessing(true);
-    setResult(null);
-    const formData = new FormData();
-    formData.append("file", file);
-    try {
-      const res = await fetch("http://localhost:8000/grayscale/", {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) throw new Error("Failed to process image");
-      const blob = await res.blob();
-      setResult(URL.createObjectURL(blob));
-    } catch (err) {
-      alert("Error processing image");
-    } finally {
-      setProcessing(false);
-    }
   };
 
   return (
@@ -76,39 +57,7 @@ export default function HomePage() {
             }
           }}
         />
-        {image && (
-          <div className="mt-6 w-full flex flex-col items-center">
-            <img
-              src={image}
-              alt="Uploaded preview"
-              className="rounded-lg shadow max-h-64 object-contain border border-gray-200 dark:border-gray-700"
-            />
-            <span className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              {fileName}
-            </span>
-            <button
-              className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2"
-              onClick={handleProcess}
-              disabled={processing}
-            >
-              {processing ? <Loader2 className="animate-spin w-4 h-4" /> : null}
-              Convert to Grayscale
-            </button>
-          </div>
-        )}
       </div>
-      {result && (
-        <div className="mt-8 flex flex-col items-center">
-          <h2 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-100">
-            Result
-          </h2>
-          <img
-            src={result}
-            alt="Grayscale result"
-            className="rounded-lg shadow max-h-64 object-contain border border-gray-200 dark:border-gray-700"
-          />
-        </div>
-      )}
     </div>
   );
 }
