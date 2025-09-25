@@ -1,20 +1,42 @@
 "use client";
+import Image from "next/image";
 
+import { Loader2, ArrowLeft, Wand2, Download } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useImage } from "../ImageContext";
 
 export default function EditPage() {
+  const [exportDropdown, setExportDropdown] = useState(false);
   const router = useRouter();
   const { image } = useImage();
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
+  // Restore edit preview from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("pixelplus-edit-preview");
+    if (saved) {
+      setResult(saved);
+    }
+  }, []);
+
+  // Persist edit preview to localStorage when it changes
+  useEffect(() => {
+    if (result) {
+      localStorage.setItem("pixelplus-edit-preview", result);
+    } else {
+      localStorage.removeItem("pixelplus-edit-preview");
+    }
+  }, [result]);
+  const [showComparison, setShowComparison] = useState(false);
+
+  // Editing options
   const handleGrayscale = async () => {
     if (!image.file) return;
     setProcessing(true);
     setResult(null);
+    setShowComparison(false);
     const formData = new FormData();
     formData.append("file", image.file);
     try {
@@ -24,28 +46,114 @@ export default function EditPage() {
       });
       if (!res.ok) throw new Error("Failed to process image");
       const blob = await res.blob();
-      setResult(URL.createObjectURL(blob));
-    } catch {
+      const url = URL.createObjectURL(blob);
+      setResult(url);
+    } catch (err) {
       alert("Error processing image");
     } finally {
       setProcessing(false);
     }
   };
 
+  // Export handlers
+  const handleExport = (type: "png" | "jpg" | "pdf") => {
+    if (!result) return;
+    if (type === "pdf") {
+      // Export both images to PDF
+      import("jspdf").then((jsPDFModule) => {
+        const jsPDF = jsPDFModule.default;
+        const doc = new jsPDF();
+        let y = 10;
+        if (image.dataUrl) {
+          doc.text("Original", 10, y);
+          doc.addImage(image.dataUrl, "JPEG", 10, y + 5, 80, 60);
+          y += 70;
+        }
+        doc.text("Edited", 10, y);
+        doc.addImage(result, "JPEG", 10, y + 5, 80, 60);
+        doc.save("comparison.pdf");
+      });
+    } else {
+      // Download the edited image as PNG or JPG
+      const link = document.createElement("a");
+      link.href = result;
+      link.download = `edited.${type}`;
+      link.click();
+    }
+    setShowComparison(true);
+  };
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-200 dark:from-gray-900 dark:to-gray-800 p-4">
-      <h1 className="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-gray-100">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-200 dark:from-gray-900 dark:to-gray-800 p-4 relative">
+      {/* Back button top left */}
+      <button
+        className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:text-blue-800 font-medium mb-4 w-fit"
+        onClick={() => router.push("/")}
+        style={{ position: "absolute", top: 24, left: 24, zIndex: 20 }}
+      >
+        <ArrowLeft className="w-5 h-5" /> Back to Upload
+      </button>
+
+      {/* Export dropdown top right */}
+      <div style={{ position: "absolute", top: 24, right: 24, zIndex: 20 }}>
+        <button
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition disabled:opacity-50"
+          onClick={() => setExportDropdown((v) => !v)}
+          disabled={!result}
+        >
+          <Download className="w-4 h-4" /> Export
+        </button>
+        {exportDropdown && (
+          <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg flex flex-col">
+            <button
+              className="px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+              onClick={() => {
+                handleExport("png");
+                setExportDropdown(false);
+              }}
+              disabled={!result}
+            >
+              Export to PNG
+            </button>
+            <button
+              className="px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+              onClick={() => {
+                handleExport("jpg");
+                setExportDropdown(false);
+              }}
+              disabled={!result}
+            >
+              Export to JPG
+            </button>
+            <button
+              className="px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+              onClick={() => {
+                handleExport("pdf");
+                setExportDropdown(false);
+              }}
+              disabled={!result}
+            >
+              Export to PDF
+            </button>
+          </div>
+        )}
+      </div>
+      <h1 className="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-gray-100 self-center">
         Edit Image
       </h1>
-      <div className="flex flex-row gap-8 w-full max-w-4xl">
+      {/* Always show editing split view */}
+      <div className="flex flex-row gap-8 w-full max-w-4xl self-center mt-8">
         <div className="flex-1 flex flex-col items-center">
           <h2 className="mb-2 text-lg font-semibold text-gray-700 dark:text-gray-200">
             Original
           </h2>
           {image.dataUrl ? (
-            <img
+            <Image
               src={image.dataUrl}
               alt="Original"
+              width={384}
+              height={384}
+              unoptimized
               className="rounded-lg shadow max-h-96 object-contain border border-gray-200 dark:border-gray-700"
             />
           ) : (
@@ -59,15 +167,21 @@ export default function EditPage() {
             Edit Preview
           </h2>
           {result ? (
-            <img
+            <Image
               src={result}
-              alt="Grayscale"
+              alt="Edited"
+              width={384}
+              height={384}
+              unoptimized
               className="rounded-lg shadow max-h-96 object-contain border border-gray-200 dark:border-gray-700"
             />
           ) : image.dataUrl ? (
-            <img
+            <Image
               src={image.dataUrl}
               alt="Preview"
+              width={384}
+              height={384}
+              unoptimized
               className="rounded-lg shadow max-h-96 object-contain border border-gray-200 dark:border-gray-700 opacity-50"
             />
           ) : (
@@ -75,27 +189,26 @@ export default function EditPage() {
               No image
             </div>
           )}
-          <button
-            className="mt-6 px-6 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2"
-            onClick={handleGrayscale}
-            disabled={processing || !image.file}
-          >
-            {processing ? <Loader2 className="animate-spin w-4 h-4" /> : null}
-            Convert to Grayscale
-          </button>
-          {!image.file && (
-            <div className="mt-2 text-xs text-red-500">
-              Image not ready for processing. Try re-uploading.
-            </div>
-          )}
         </div>
       </div>
-      <button
-        className="mt-8 text-blue-600 underline"
-        onClick={() => router.push("/")}
-      >
-        Back to Upload
-      </button>
+      {/* Show comparison only after export - removed as requested */}
+      {/* Editing options bar */}
+      <div className="flex flex-row gap-4 justify-center items-center mt-10 mb-2 self-center">
+        <button
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition disabled:opacity-50"
+          onClick={handleGrayscale}
+          disabled={processing || !image.file}
+        >
+          <Wand2 className="w-4 h-4" />
+          {processing ? <Loader2 className="animate-spin w-4 h-4" /> : null}
+          Grayscale
+        </button>
+      </div>
+      {!image.file && (
+        <div className="mt-2 text-xs text-red-500 self-center">
+          Image not ready for processing. Try re-uploading.
+        </div>
+      )}
     </div>
   );
 }
