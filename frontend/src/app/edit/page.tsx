@@ -445,7 +445,10 @@ export default function EditPage() {
         <div className="w-full flex justify-between items-start mb-2">
           <UndoButton
             onClick={undoLastEdit}
-            disabled={!result && editHistory.length === 0}
+            disabled={
+              (!result && editHistory.length === 0) ||
+              (result === image.dataUrl && editHistory.length === 0)
+            }
           />
           <ExportButton
             disabled={!result}
