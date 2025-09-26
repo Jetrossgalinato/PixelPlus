@@ -5,7 +5,14 @@ import { SlidersHorizontal } from "lucide-react";
 
 type RGBToolProps = {
   imageDataUrl: string | null;
-  onResult: (url: string, originalForUndo?: string) => void;
+  onResult: (
+    url: string,
+    originalForUndo?: string,
+    sliderValues?: {
+      type: "rgb";
+      values: { r: number; g: number; b: number };
+    }
+  ) => void;
   disabled?: boolean;
   className?: string;
   resetSlidersSignal?: number; // increment to trigger reset
@@ -96,12 +103,19 @@ export default function RGBTool({
       );
       if (!apiRes.ok) throw new Error("Backend error");
       const outBlob = await apiRes.blob();
-      if (lastUrl.current) URL.revokeObjectURL(lastUrl.current);
+      // Create new URL but do NOT revoke the previous one - let the parent component manage URL lifecycle
       const url = URL.createObjectURL(outBlob);
+      // Keep track of our last URL but don't revoke it here
       lastUrl.current = url;
-      onResult(url, imageDataUrl);
+      // Pass the URL and original to parent for history tracking
+      onResult(url, imageDataUrl, {
+        type: "rgb",
+        values: { r, g, b },
+      });
+      console.log(`RGBTool: Created new blob URL: ${url}`);
       setProcessing(false);
-    } catch {
+    } catch (error) {
+      console.error("RGB processing error:", error);
       setError("Error processing image");
       setProcessing(false);
     }

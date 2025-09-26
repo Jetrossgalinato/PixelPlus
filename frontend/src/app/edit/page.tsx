@@ -20,6 +20,8 @@ export default function EditPage() {
   const [openSlider, setOpenSlider] = useState<null | "hsv" | "rgb">(null);
   const [result, setResult] = useState<string | null>(null);
   const prevResultUrl = useRef<string | null>(null);
+  // Keep track of all blob URLs created during this session to prevent revocation of URLs in use
+  const createdBlobUrls = useRef<Set<string>>(new Set());
   // Track both image and HSV slider state
   const [undoStack, setUndoStack] = useState<
     { url: string; hsv: { h: number; s: number; v: number } }[]
@@ -55,19 +57,38 @@ export default function EditPage() {
       url: string,
       originalForUndo?: string,
       sliderValues?: {
-        type: "hsv";
-        values: { h: number; s: number; v: number };
+        type: "hsv" | "rgb";
+        values:
+          | { h: number; s: number; v: number }
+          | { r: number; g: number; b: number };
       }
     ) => {
+      // Debug information
+      console.log(`Received new edit result URL: ${url}`);
+
+      // Track blob URLs to prevent premature revocation
+      if (url.startsWith("blob:")) {
+        createdBlobUrls.current.add(url);
+        console.log(
+          `Added URL to tracked set, now tracking ${createdBlobUrls.current.size} URLs`
+        );
+      }
+
       // Save current result and slider state to history before applying new edit
       if (result) {
+        console.log(`Adding current result to history: ${result}`);
         setEditHistory((prev) => [...prev, { url: result, hsv: hsvSlider }]);
       } else if (originalForUndo) {
         // If this is the first edit, save original
+        console.log(
+          `First edit, saving original to undo stack: ${originalForUndo}`
+        );
         setUndoStack([{ url: originalForUndo, hsv: { h: 0, s: 1, v: 1 } }]);
       }
       if (sliderValues && sliderValues.type === "hsv") {
-        setHsvSlider(sliderValues.values);
+        setHsvSlider(
+          sliderValues.values as { h: number; s: number; v: number }
+        );
       }
       setResult(url);
     },
@@ -98,9 +119,41 @@ export default function EditPage() {
 
       setEditHistory(newHistory);
       if (previousState) {
-        setResult(previousState.url);
-        setHsvSlider(previousState.hsv);
-        setHsvResetSignal((s) => s + 1); // trigger HSVTool slider reset
+        // Debug information
+        console.log(`Undoing to URL: ${previousState.url}`);
+        console.log(`URL is blob: ${previousState.url.startsWith("blob:")}`);
+        if (previousState.url.startsWith("blob:")) {
+          console.log(
+            `URL is in tracked set: ${createdBlobUrls.current.has(
+              previousState.url
+            )}`
+          );
+          console.log(`Tracked URLs count: ${createdBlobUrls.current.size}`);
+        }
+
+        // Validate that the URL still exists in our tracked set or is not a blob URL
+        const isValidUrl =
+          !previousState.url.startsWith("blob:") ||
+          createdBlobUrls.current.has(previousState.url);
+
+        if (isValidUrl) {
+          setResult(previousState.url);
+          setHsvSlider(previousState.hsv);
+          setHsvResetSignal((s) => s + 1); // trigger HSVTool slider reset
+        } else {
+          // Fallback to original image if URL is invalid
+          console.warn(
+            "Invalid URL detected in history, falling back to original"
+          );
+          if (undoStack.length > 0) {
+            setResult(undoStack[0].url);
+            setHsvSlider(undoStack[0].hsv);
+          } else {
+            setResult(image.dataUrl);
+            setHsvSlider({ h: 0, s: 1, v: 1 });
+          }
+          setHsvResetSignal((s) => s + 1);
+        }
       } else if (undoStack.length > 0) {
         setResult(undoStack[0].url);
         setHsvSlider(undoStack[0].hsv);
@@ -113,13 +166,39 @@ export default function EditPage() {
     } else if (result) {
       handleBackToDefault();
     }
-  }, [editHistory, result, undoStack, handleBackToDefault]);
+  }, [editHistory, result, undoStack, handleBackToDefault, image.dataUrl]);
 
-  // Cleanup object URL on unmount
+  // Add effect for result tracking
   useEffect(() => {
+    if (result && result.startsWith("blob:")) {
+      prevResultUrl.current = result;
+    }
+  }, [result]);
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    // Capture the current value of the ref at the time the effect runs
+    const currentUrls = new Set(createdBlobUrls.current);
     const urlAtMount = prevResultUrl.current;
+
     return () => {
-      if (urlAtMount) URL.revokeObjectURL(urlAtMount);
+      // Cleanup URLs using the captured set
+      currentUrls.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          console.error("Failed to revoke URL:", url, e);
+        }
+      });
+
+      // Also cleanup the initial URL if it exists
+      if (urlAtMount) {
+        try {
+          URL.revokeObjectURL(urlAtMount);
+        } catch (e) {
+          console.error("Failed to revoke initial URL:", e);
+        }
+      }
     };
   }, []);
 

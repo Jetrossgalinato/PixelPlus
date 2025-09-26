@@ -5,7 +5,14 @@ import { SlidersHorizontal } from "lucide-react";
 
 type HSVToolProps = {
   imageDataUrl: string | null;
-  onResult: (url: string, originalForUndo?: string) => void;
+  onResult: (
+    url: string,
+    originalForUndo?: string,
+    sliderValues?: {
+      type: "hsv";
+      values: { h: number; s: number; v: number };
+    }
+  ) => void;
   disabled?: boolean;
   className?: string;
   resetSlidersSignal?: {
@@ -100,12 +107,19 @@ export default function HSVTool({
       );
       if (!apiRes.ok) throw new Error("Backend error");
       const outBlob = await apiRes.blob();
-      if (lastUrl.current) URL.revokeObjectURL(lastUrl.current);
+      // Create new URL but do NOT revoke the previous one - let the parent component manage URL lifecycle
       const url = URL.createObjectURL(outBlob);
+      // Keep track of our last URL but don't revoke it here
       lastUrl.current = url;
-      onResult(url, imageDataUrl);
+      // Pass the URL and original to parent for history tracking
+      onResult(url, imageDataUrl, {
+        type: "hsv",
+        values: { h, s, v },
+      });
+      console.log(`HSVTool: Created new blob URL: ${url}`);
       setProcessing(false);
-    } catch {
+    } catch (error) {
+      console.error("HSV processing error:", error);
       setError("Error processing image");
       setProcessing(false);
     }
