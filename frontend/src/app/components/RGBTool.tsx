@@ -44,12 +44,16 @@ export default function RGBTool({
   const [b, setB] = useState(1);
   // Reset sliders to default when resetSlidersSignal changes
   useEffect(() => {
-    setR(1);
-    setG(1);
-    setB(1);
-    // Optionally re-apply RGB with defaults if an image is loaded
-    if (imageDataUrl) applyRGB(1, 1, 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (resetSlidersSignal) {
+      console.log("RGB Tool: Resetting sliders");
+      setR(1);
+      setG(1);
+      setB(1);
+
+      // Never re-apply RGB on reset - only reset UI state
+      // This prevents unwanted processing and interference with undo operations
+      // The parent component is responsible for setting the image state
+    }
   }, [resetSlidersSignal]);
 
   // Handle click outside to close modal
@@ -179,7 +183,15 @@ export default function RGBTool({
     <>
       <button
         className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white cursor-pointer rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50"
-        onClick={() => setShowSliders(!showSliders)}
+        onClick={() => {
+          console.log(
+            "RGBTool: Button clicked, showSliders:",
+            showSliders,
+            "-> will change to",
+            !showSliders
+          );
+          setShowSliders(!showSliders);
+        }}
         disabled={disabled || !imageDataUrl}
         aria-expanded={showSliders}
         aria-controls="rgb-sliders"

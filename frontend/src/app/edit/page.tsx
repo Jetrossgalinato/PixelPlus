@@ -20,20 +20,37 @@ export default function EditPage() {
   const [openSlider, setOpenSlider] = useState<null | "hsv" | "rgb">(null);
   const [result, setResult] = useState<string | null>(null);
   const prevResultUrl = useRef<string | null>(null);
+  // Track when undo button is clicked, to ensure sliders are always closed
+  const isUndoClicked = useRef(false);
   // Keep track of all blob URLs created during this session to prevent revocation of URLs in use
   const createdBlobUrls = useRef<Set<string>>(new Set());
-  // Track both image and HSV slider state
+  // Track both image and slider states
   const [undoStack, setUndoStack] = useState<
-    { url: string; hsv: { h: number; s: number; v: number } }[]
+    {
+      url: string;
+      hsv: { h: number; s: number; v: number };
+      rgb?: { r: number; g: number; b: number };
+      lastTool?: "hsv" | "rgb"; // Track which tool was last used
+    }[]
   >([]); // For resetting to original
   const [editHistory, setEditHistory] = useState<
-    { url: string; hsv: { h: number; s: number; v: number } }[]
+    {
+      url: string;
+      hsv: { h: number; s: number; v: number };
+      rgb?: { r: number; g: number; b: number };
+      lastTool?: "hsv" | "rgb"; // Track which tool was last used
+    }[]
   >([]); // For step-by-step undo
   const [hsvSlider, setHsvSlider] = useState<{
     h: number;
     s: number;
     v: number;
   }>({ h: 0, s: 1, v: 1 });
+  const [rgbSlider, setRgbSlider] = useState<{
+    r: number;
+    g: number;
+    b: number;
+  }>({ r: 1, g: 1, b: 1 });
 
   // Restore edit preview from localStorage on mount
   useEffect(() => {
@@ -76,51 +93,104 @@ export default function EditPage() {
 
       // Save current result and slider state to history before applying new edit
       if (result) {
-        console.log(`Adding current result to history: ${result}`);
-        setEditHistory((prev) => [...prev, { url: result, hsv: hsvSlider }]);
+        // Determine which tool is currently being used, if any
+        const currentTool = sliderValues?.type;
+        console.log(
+          `Adding current result to history: ${result}, tool: ${currentTool}`
+        );
+        setEditHistory((prev) => [
+          ...prev,
+          {
+            url: result,
+            hsv: hsvSlider,
+            rgb: rgbSlider,
+            lastTool: currentTool, // Track which tool was used
+          },
+        ]);
       } else if (originalForUndo) {
         // If this is the first edit, save original
         console.log(
           `First edit, saving original to undo stack: ${originalForUndo}`
         );
-        setUndoStack([{ url: originalForUndo, hsv: { h: 0, s: 1, v: 1 } }]);
+        setUndoStack([
+          {
+            url: originalForUndo,
+            hsv: { h: 0, s: 1, v: 1 },
+            rgb: { r: 1, g: 1, b: 1 },
+            lastTool: sliderValues?.type,
+          },
+        ]);
       }
-      if (sliderValues && sliderValues.type === "hsv") {
-        setHsvSlider(
-          sliderValues.values as { h: number; s: number; v: number }
-        );
+
+      // Update the appropriate slider state based on the tool used
+      if (sliderValues) {
+        if (sliderValues.type === "hsv") {
+          setHsvSlider(
+            sliderValues.values as { h: number; s: number; v: number }
+          );
+        } else if (sliderValues.type === "rgb") {
+          setRgbSlider(
+            sliderValues.values as { r: number; g: number; b: number }
+          );
+        }
       }
+
       setResult(url);
     },
-    [result, hsvSlider]
+    [result, hsvSlider, rgbSlider]
   );
 
   // Back to default (original) handler
   const handleBackToDefault = useCallback(() => {
     setRgbResetSignal((s) => s + 1); // trigger RGBTool slider reset
     setHsvResetSignal((s) => s + 1); // trigger HSVTool slider reset
+    setOpenSlider(null); // Close any open sliders
+
     if (undoStack.length > 0) {
       setResult(undoStack[0].url);
       setHsvSlider(undoStack[0].hsv);
+      if (undoStack[0].rgb) {
+        setRgbSlider(undoStack[0].rgb);
+      } else {
+        setRgbSlider({ r: 1, g: 1, b: 1 });
+      }
       setUndoStack([]);
     } else if (image.dataUrl) {
       setResult(null); // will show original placeholder
       setHsvSlider({ h: 0, s: 1, v: 1 });
+      setRgbSlider({ r: 1, g: 1, b: 1 });
     }
     setEditHistory([]);
   }, [undoStack, image.dataUrl]);
 
   // Undo last edit - goes back one step in edit history
   const undoLastEdit = useCallback(() => {
+    console.log(`Undo clicked: editHistory length = ${editHistory.length}`);
+    isUndoClicked.current = true; // Set flag to indicate undo was clicked
+
     if (editHistory.length > 0) {
       // Get the previous state from history
       const newHistory = [...editHistory];
       const previousState = newHistory.pop();
 
+      // Always close any open sliders before proceeding with the undo
+      setOpenSlider(null);
+
       setEditHistory(newHistory);
+      console.log(
+        `After pop: editHistory will be length = ${newHistory.length}`
+      );
+
       if (previousState) {
         // Debug information
         console.log(`Undoing to URL: ${previousState.url}`);
+        console.log(
+          `Previous state last tool: ${previousState.lastTool || "none"}`
+        );
+        console.log(`Previous state HSV values:`, previousState.hsv);
+        if (previousState.rgb) {
+          console.log(`Previous state RGB values:`, previousState.rgb);
+        }
         console.log(`URL is blob: ${previousState.url.startsWith("blob:")}`);
         if (previousState.url.startsWith("blob:")) {
           console.log(
@@ -138,8 +208,19 @@ export default function EditPage() {
 
         if (isValidUrl) {
           setResult(previousState.url);
+
+          // Apply the stored slider values
           setHsvSlider(previousState.hsv);
-          setHsvResetSignal((s) => s + 1); // trigger HSVTool slider reset
+          if (previousState.rgb) {
+            setRgbSlider(previousState.rgb);
+          }
+
+          // Reset both slider types - but don't automatically open any slider modals
+          setRgbResetSignal((s) => s + 1);
+          setHsvResetSignal((s) => s + 1);
+
+          // Close any open sliders to avoid interfering with future undos
+          setOpenSlider(null);
         } else {
           // Fallback to original image if URL is invalid
           console.warn(
@@ -148,20 +229,34 @@ export default function EditPage() {
           if (undoStack.length > 0) {
             setResult(undoStack[0].url);
             setHsvSlider(undoStack[0].hsv);
+            if (undoStack[0].rgb) {
+              setRgbSlider(undoStack[0].rgb);
+            }
           } else {
             setResult(image.dataUrl);
             setHsvSlider({ h: 0, s: 1, v: 1 });
+            setRgbSlider({ r: 1, g: 1, b: 1 });
           }
+          // Reset both slider types
           setHsvResetSignal((s) => s + 1);
+          setRgbResetSignal((s) => s + 1);
         }
       } else if (undoStack.length > 0) {
         setResult(undoStack[0].url);
         setHsvSlider(undoStack[0].hsv);
+        if (undoStack[0].rgb) {
+          setRgbSlider(undoStack[0].rgb);
+        }
         setHsvResetSignal((s) => s + 1);
+        setRgbResetSignal((s) => s + 1);
+        setOpenSlider(null); // Close any open sliders
       } else {
         setResult(null);
         setHsvSlider({ h: 0, s: 1, v: 1 });
+        setRgbSlider({ r: 1, g: 1, b: 1 });
         setHsvResetSignal((s) => s + 1);
+        setRgbResetSignal((s) => s + 1);
+        setOpenSlider(null); // Close any open sliders
       }
     } else if (result) {
       handleBackToDefault();
@@ -172,6 +267,12 @@ export default function EditPage() {
   useEffect(() => {
     if (result && result.startsWith("blob:")) {
       prevResultUrl.current = result;
+    }
+
+    // If this was triggered by an undo action, ensure sliders are closed
+    if (isUndoClicked.current) {
+      setOpenSlider(null);
+      isUndoClicked.current = false;
     }
   }, [result]);
 

@@ -49,13 +49,18 @@ export default function HSVTool({
   // Reset sliders to specific values when resetSlidersSignal changes (do NOT auto-apply HSV)
   useEffect(() => {
     if (!resetSlidersSignal) return;
+    console.log(
+      "HSVTool: Received reset signal with counter:",
+      resetSlidersSignal.counter
+    );
+    console.log("HSVTool: Setting values to:", resetSlidersSignal.values);
+
     const { h: newH, s: newS, v: newV } = resetSlidersSignal.values;
     setH(newH);
     setS(newS);
     setV(newV);
     // Do NOT call applyHSV here; parent is responsible for image state
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetSlidersSignal?.counter]);
+  }, [resetSlidersSignal]);
 
   // Handle click outside to close modal
   useEffect(() => {
@@ -181,7 +186,15 @@ export default function HSVTool({
     <>
       <button
         className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white cursor-pointer rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50"
-        onClick={() => setShowSliders(!showSliders)}
+        onClick={() => {
+          console.log(
+            "HSVTool: Button clicked, showSliders:",
+            showSliders,
+            "-> will change to",
+            !showSliders
+          );
+          setShowSliders(!showSliders);
+        }}
         disabled={disabled || !imageDataUrl}
         aria-expanded={showSliders}
         aria-controls="hsv-sliders"
