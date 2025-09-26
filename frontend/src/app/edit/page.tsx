@@ -26,52 +26,6 @@ export default function EditPage() {
     // Always start with empty undo stack on mount (or new image)
     setUndoStack([]);
   }, [image.dataUrl, image.fileName]);
-
-  // Persist edit preview and undo stack to localStorage when they change (guarded)
-  // Safe storage helpers (avoid quota errors with large images)
-  const MAX_ITEM_BYTES = 2_500_000; // ~2.5MB max per item
-  const GRAYSCALE_PREFIX = "pixelplus-cache-";
-  function approximateSize(str: string) {
-    return str.length * 2; // conservative (UTF-16)
-  }
-  // stable helper (won't change across renders)
-  function safeSetItem(key: string, value: string) {
-    if (approximateSize(value) > MAX_ITEM_BYTES) {
-      console.warn("PixelPlus: item too large to cache", key);
-      return;
-    }
-    try {
-      localStorage.setItem(key, value);
-    } catch {
-      try {
-        // Evict half of grayscale cache entries (simple heuristic) then retry
-        const keys = Object.keys(localStorage).filter((k) =>
-          k.startsWith(GRAYSCALE_PREFIX)
-        );
-        for (let i = 0; i < Math.ceil(keys.length / 2); i++) {
-          localStorage.removeItem(keys[i]);
-        }
-        localStorage.setItem(key, value);
-      } catch (err) {
-        console.warn("PixelPlus: failed to cache after eviction", err);
-      }
-    }
-  }
-  useEffect(() => {
-    if (result) {
-      safeSetItem("pixelplus-edit-preview", result);
-    } else {
-      localStorage.removeItem("pixelplus-edit-preview");
-    }
-    // undo stack is tiny; store normally
-    try {
-      localStorage.setItem("pixelplus-edit-undo", JSON.stringify(undoStack));
-    } catch {
-      /* ignore */
-    }
-    // safeSetItem is stable; exhaustive-deps not required
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result, undoStack]);
   // Removed unused showComparison for performance cleanliness
   const [error] = useState<string | null>(null);
 
@@ -165,12 +119,6 @@ export default function EditPage() {
               onResult={handleEditResult}
               disabled={processing}
             />
-            <span
-              className="text-xs text-gray-600 dark:text-gray-400 mt-1 ml-1"
-              title="Convert to grayscale"
-            >
-              Grayscale
-            </span>
           </div>
           {/* Divider */}
           <div className="w-10 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
@@ -183,33 +131,26 @@ export default function EditPage() {
               resetSlidersSignal={rgbResetSignal}
               layout="horizontal"
             />
-            <span
-              className="text-xs text-gray-600 dark:text-gray-400 mt-1 ml-1"
-              title="Adjust RGB channels"
-            >
-              RGB
-            </span>
           </div>
           {/* Divider */}
           <div className="w-10 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
-          {/* Undo Button */}
-          <button
-            className="flex items-center gap-2 px-3 py-2 h-10 w-10 bg-gray-500 text-white rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50 justify-start ml-1"
-            onClick={handleBackToDefault}
-            disabled={!result}
-            style={{ minWidth: 40 }}
-            title="Undo all edits"
-          >
-            <RotateCcw className="w-5 h-5" />
-          </button>
         </div>
         {/* Spacer to push content to top */}
         <div className="flex-1" />
       </aside>
       {/* Main content area shifted right */}
       <main className="flex-1 flex flex-col items-center px-8 py-8">
-        {/* Export button top right */}
-        <div className="w-full flex justify-end mb-2">
+        {/* Undo and Export buttons at top corners */}
+        <div className="w-full flex justify-between items-start mb-2">
+          <button
+            className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50"
+            onClick={handleBackToDefault}
+            disabled={!result}
+            style={{ minWidth: 60 }}
+            title="Undo all edits"
+          >
+            <RotateCcw className="w-4 h-4" /> Undo
+          </button>
           <button
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition disabled:opacity-50"
             onClick={() => setShowExportModal(true)}
