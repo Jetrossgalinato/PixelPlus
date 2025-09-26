@@ -5,7 +5,14 @@ import { SlidersHorizontal } from "lucide-react";
 
 type HSVToolProps = {
   imageDataUrl: string | null;
-  onResult: (url: string, originalForUndo?: string) => void;
+  onResult: (
+    url: string,
+    originalForUndo?: string,
+    sliderValues?: {
+      type: "hsv";
+      values: { h: number; s: number; v: number };
+    }
+  ) => void;
   disabled?: boolean;
   className?: string;
   resetSlidersSignal?: {
@@ -42,13 +49,18 @@ export default function HSVTool({
   // Reset sliders to specific values when resetSlidersSignal changes (do NOT auto-apply HSV)
   useEffect(() => {
     if (!resetSlidersSignal) return;
+    console.log(
+      "HSVTool: Received reset signal with counter:",
+      resetSlidersSignal.counter
+    );
+    console.log("HSVTool: Setting values to:", resetSlidersSignal.values);
+
     const { h: newH, s: newS, v: newV } = resetSlidersSignal.values;
     setH(newH);
     setS(newS);
     setV(newV);
     // Do NOT call applyHSV here; parent is responsible for image state
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetSlidersSignal?.counter]);
+  }, [resetSlidersSignal]);
 
   // Handle click outside to close modal
   useEffect(() => {
@@ -100,12 +112,19 @@ export default function HSVTool({
       );
       if (!apiRes.ok) throw new Error("Backend error");
       const outBlob = await apiRes.blob();
-      if (lastUrl.current) URL.revokeObjectURL(lastUrl.current);
+      // Create new URL but do NOT revoke the previous one - let the parent component manage URL lifecycle
       const url = URL.createObjectURL(outBlob);
+      // Keep track of our last URL but don't revoke it here
       lastUrl.current = url;
-      onResult(url, imageDataUrl);
+      // Pass the URL and original to parent for history tracking
+      onResult(url, imageDataUrl, {
+        type: "hsv",
+        values: { h, s, v },
+      });
+      console.log(`HSVTool: Created new blob URL: ${url}`);
       setProcessing(false);
-    } catch {
+    } catch (error) {
+      console.error("HSV processing error:", error);
       setError("Error processing image");
       setProcessing(false);
     }
@@ -167,7 +186,15 @@ export default function HSVTool({
     <>
       <button
         className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white cursor-pointer rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50"
-        onClick={() => setShowSliders(!showSliders)}
+        onClick={() => {
+          console.log(
+            "HSVTool: Button clicked, showSliders:",
+            showSliders,
+            "-> will change to",
+            !showSliders
+          );
+          setShowSliders(!showSliders);
+        }}
         disabled={disabled || !imageDataUrl}
         aria-expanded={showSliders}
         aria-controls="hsv-sliders"
