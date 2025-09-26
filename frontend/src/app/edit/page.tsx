@@ -94,7 +94,7 @@ export default function EditPage() {
   return (
     <div className="min-h-screen flex flex-row bg-gradient-to-br from-gray-50 to-gray-200 dark:from-gray-900 dark:to-gray-800 relative">
       <aside
-        className="h-screen w-40 min-w-[160px] bg-white/70 dark:bg-gray-900/70 border-r border-gray-200 dark:border-gray-800 flex flex-col items-start py-8 gap-0 shadow-xl z-10 relative backdrop-blur-md"
+        className="h-screen w-45 min-w-[200px] bg-white/70 dark:bg-gray-900/70 border-r border-gray-200 dark:border-gray-800 flex flex-col items-start py-8 gap-0 shadow-xl z-10 relative backdrop-blur-md"
         style={{ boxShadow: "0 4px 32px 0 rgba(0,0,0,0.10)" }}
       >
         {/* Back button at very top, left-aligned */}
