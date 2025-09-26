@@ -394,7 +394,11 @@ export default function DrawingTool({
         toolbarRef.current &&
         !toolbarRef.current.contains(event.target as Node)
       ) {
-        // If clicked outside toolbar but not on canvas, don't do anything
+        // Close color picker and settings if open
+        setShowColorPicker(false);
+        setShowSettings(false);
+
+        // If clicked outside toolbar but on canvas, keep drawing
         if (
           canvasWrapperRef.current &&
           canvasWrapperRef.current.contains(event.target as Node)
@@ -407,6 +411,9 @@ export default function DrawingTool({
           saveCanvasImage();
           setActiveShape(null);
         }
+
+        // Close toolbar when clicking outside
+        setShowToolbar(false);
       }
     },
     [activeShape, saveCanvasImage]
@@ -414,17 +421,33 @@ export default function DrawingTool({
 
   // Set up click outside detection
   useEffect(() => {
-    document.addEventListener("mousedown", handleClickOutside);
+    // Add a slight delay to the click handler to ensure it runs after other click events
+    const handleClickOutsideWithDelay = (event: MouseEvent) => {
+      setTimeout(() => {
+        handleClickOutside(event);
+      }, 10);
+    };
+
+    document.addEventListener("mousedown", handleClickOutsideWithDelay);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutsideWithDelay);
     };
   }, [handleClickOutside]);
 
   // Tool button handlers
   const handleDrawingButtonClick = () => {
-    setShowToolbar((prevState) => !prevState);
-    if (!activeShape) {
+    const newShowToolbar = !showToolbar;
+    setShowToolbar(newShowToolbar);
+
+    // When opening toolbar, set default tool if none selected
+    if (newShowToolbar && !activeShape) {
       setActiveShape("line"); // Default to line drawing when opened
+    }
+
+    // When closing toolbar, make sure to close related popovers too
+    if (!newShowToolbar) {
+      setShowColorPicker(false);
+      setShowSettings(false);
     }
   };
 
@@ -588,7 +611,10 @@ export default function DrawingTool({
 
       {/* Popovers for colors and settings */}
       {showColorPicker && (
-        <div className="absolute left-full ml-2 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700">
+        <div
+          className="absolute left-full ml-2 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700"
+          onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+        >
           <div className="flex flex-col gap-3 min-w-[150px]">
             <div>
               <label className="text-sm text-gray-300 block mb-1">Fill:</label>
@@ -615,7 +641,10 @@ export default function DrawingTool({
       )}
 
       {showSettings && (
-        <div className="absolute left-full ml-2 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700">
+        <div
+          className="absolute left-full ml-2 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700"
+          onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+        >
           <div className="min-w-[150px]">
             <label className="text-sm text-gray-300 block mb-1">
               Width: {strokeWidth}
@@ -634,7 +663,10 @@ export default function DrawingTool({
 
       {/* Text input (when text tool is active) */}
       {activeShape === "text" && (
-        <div className="absolute left-full ml-2 top-0 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700">
+        <div
+          className="absolute left-full ml-2 top-0 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700"
+          onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+        >
           <input
             type="text"
             value={textInput}
@@ -648,7 +680,10 @@ export default function DrawingTool({
 
       {/* Help text for polygon */}
       {activeShape === "polygon" && (
-        <div className="absolute left-full ml-2 bottom-0 bg-gray-800 p-2 rounded-lg shadow-lg border border-gray-700">
+        <div
+          className="absolute left-full ml-2 bottom-0 bg-gray-800 p-2 rounded-lg shadow-lg border border-gray-700"
+          onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+        >
           <p className="text-xs text-gray-400 whitespace-nowrap">
             Click to add points.
             <br />
@@ -693,7 +728,10 @@ export default function DrawingTool({
 
       {/* Text input for when it's needed outside the toolbar */}
       {activeShape === "text" && showSettings && (
-        <div className="fixed bottom-4 left-4 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700 z-50">
+        <div
+          className="fixed bottom-4 left-4 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700 z-50"
+          onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+        >
           <p className="text-xs text-gray-400 mb-1">
             Click on the canvas to place text:
           </p>
