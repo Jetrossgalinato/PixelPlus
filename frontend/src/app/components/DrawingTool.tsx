@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import ReactDOM from "react-dom";
 import { Pencil, Square, Circle, Type, Move, Trash2 } from "lucide-react";
 import * as fabric from "fabric";
 
@@ -16,24 +15,27 @@ export default function DrawingTool({
   onResult,
   disabled = false,
 }: DrawingToolProps) {
-  const [showCanvas, setShowCanvas] = useState(false);
+  const [showToolbar, setShowToolbar] = useState(false);
   const [activeShape, setActiveShape] = useState<string | null>(null);
   const [textInput, setTextInput] = useState("");
   const [fillColor, setFillColor] = useState("#ffffff");
   const [strokeColor, setStrokeColor] = useState("#000000");
   const [strokeWidth, setStrokeWidth] = useState(2);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const canvasRef = useRef<fabric.Canvas | null>(null);
   const canvasWrapperRef = useRef<HTMLDivElement | null>(null);
   const backgroundImageRef = useRef<fabric.Image | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
 
   const isDrawingRef = useRef(false);
   const shapeRef = useRef<fabric.Object | null>(null);
   const startPointRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const polygonPointsRef = useRef<{ x: number; y: number }[]>([]);
 
-  // Initialize canvas when showCanvas becomes true
+  // Initialize canvas when component mounts or imageDataUrl changes
   useEffect(() => {
-    if (showCanvas && !canvasRef.current && canvasWrapperRef.current) {
+    if (imageDataUrl && !canvasRef.current && canvasWrapperRef.current) {
       const canvas = new fabric.Canvas("drawing-canvas", {
         width: canvasWrapperRef.current.clientWidth,
         height: canvasWrapperRef.current.clientHeight,
@@ -94,9 +96,7 @@ export default function DrawingTool({
         canvasRef.current = null;
       };
     }
-  }, [showCanvas, imageDataUrl]);
-
-  // This section was removed to avoid duplicate declarations
+  }, [imageDataUrl]);
 
   // Set up mouse event handlers for drawing shapes
   useEffect(() => {
@@ -383,200 +383,242 @@ export default function DrawingTool({
   }, [imageDataUrl, onResult]);
 
   const saveAndClose = useCallback(() => {
-    if (showCanvas) {
-      saveCanvasImage();
-      setShowCanvas(false);
-      setActiveShape(null);
-    }
-  }, [showCanvas, saveCanvasImage]);
+    saveCanvasImage();
+    setActiveShape(null);
+  }, [saveCanvasImage]);
 
-  // Handle click outside canvas
+  // Handle click outside toolbar
   const handleClickOutside = useCallback(
     (event: MouseEvent) => {
-      if (showCanvas && canvasWrapperRef.current) {
-        if (!canvasWrapperRef.current.contains(event.target as Node)) {
-          // Check if click is on tool controls
-          const controlsArea = document.getElementById("drawing-controls");
-          if (!controlsArea || !controlsArea.contains(event.target as Node)) {
-            saveAndClose();
-          }
+      if (
+        toolbarRef.current &&
+        !toolbarRef.current.contains(event.target as Node)
+      ) {
+        // If clicked outside toolbar but not on canvas, don't do anything
+        if (
+          canvasWrapperRef.current &&
+          canvasWrapperRef.current.contains(event.target as Node)
+        ) {
+          return;
+        }
+
+        // If we have an active shape and clicked elsewhere, save changes
+        if (activeShape) {
+          saveCanvasImage();
+          setActiveShape(null);
         }
       }
     },
-    [showCanvas, saveAndClose]
+    [activeShape, saveCanvasImage]
   );
 
   // Set up click outside detection
   useEffect(() => {
-    if (showCanvas) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => {
-        document.removeEventListener("mousedown", handleClickOutside);
-      };
-    }
-  }, [showCanvas, handleClickOutside]);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [handleClickOutside]);
 
   // Tool button handlers
   const handleDrawingButtonClick = () => {
-    setShowCanvas(true);
-    setActiveShape("line"); // Default to line drawing when opened
+    setShowToolbar((prevState) => !prevState);
+    if (!activeShape) {
+      setActiveShape("line"); // Default to line drawing when opened
+    }
   };
 
   const handleShapeSelect = (shape: string) => {
     setActiveShape(shape);
-  };
-
-  // Render the drawing tools UI
-  const drawingControls = (
+  }; // Render the vertical toolbar similar to Photoshop
+  const verticalToolbar = (
     <div
-      id="drawing-controls"
-      className="drawing-controls bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 w-full max-w-3xl"
+      id="drawing-tools"
+      ref={toolbarRef}
+      className={`drawing-tools bg-gray-800 p-2 rounded-lg shadow-lg border border-gray-700 
+                 flex flex-col gap-2 absolute left-full ml-2 top-0 z-40 
+                 transition-opacity duration-200 ${
+                   showToolbar ? "opacity-100" : "opacity-0 pointer-events-none"
+                 }`}
+      style={{ width: "50px" }}
     >
-      <div className="flex flex-col gap-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-            Drawing Tools
-          </h3>
-          <div className="space-x-2">
-            <button
-              onClick={clearCanvas}
-              className="p-2 bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 rounded-md hover:bg-red-200 dark:hover:bg-red-800 transition"
-              title="Clear all shapes"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
-            <button
-              onClick={saveAndClose}
-              className="p-2 bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300 rounded-md hover:bg-green-200 dark:hover:bg-green-800 transition"
-              title="Save and close"
-            >
-              Save
-            </button>
+      {/* Tool buttons */}
+      <button
+        onClick={() => handleShapeSelect("line")}
+        className={`p-2 rounded-md ${
+          activeShape === "line"
+            ? "bg-blue-500 text-white"
+            : "bg-gray-700 text-gray-200 hover:bg-gray-600"
+        }`}
+        title="Draw Line"
+      >
+        <Pencil className="w-5 h-5" />
+      </button>
+      <button
+        onClick={() => handleShapeSelect("rectangle")}
+        className={`p-2 rounded-md ${
+          activeShape === "rectangle"
+            ? "bg-blue-500 text-white"
+            : "bg-gray-700 text-gray-200 hover:bg-gray-600"
+        }`}
+        title="Draw Rectangle"
+      >
+        <Square className="w-5 h-5" />
+      </button>
+      <button
+        onClick={() => handleShapeSelect("circle")}
+        className={`p-2 rounded-md ${
+          activeShape === "circle"
+            ? "bg-blue-500 text-white"
+            : "bg-gray-700 text-gray-200 hover:bg-gray-600"
+        }`}
+        title="Draw Circle"
+      >
+        <Circle className="w-5 h-5" />
+      </button>
+      <button
+        onClick={() => handleShapeSelect("polygon")}
+        className={`p-2 rounded-md ${
+          activeShape === "polygon"
+            ? "bg-blue-500 text-white"
+            : "bg-gray-700 text-gray-200 hover:bg-gray-600"
+        }`}
+        title="Draw Polygon (Double-click to finish)"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="20"
+          height="20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <polygon points="12 2 19 7 19 17 12 22 5 17 5 7" />
+        </svg>
+      </button>
+      <button
+        onClick={() => handleShapeSelect("text")}
+        className={`p-2 rounded-md ${
+          activeShape === "text"
+            ? "bg-blue-500 text-white"
+            : "bg-gray-700 text-gray-200 hover:bg-gray-600"
+        }`}
+        title="Add Text"
+      >
+        <Type className="w-5 h-5" />
+      </button>
+      <button
+        onClick={() => handleShapeSelect("move")}
+        className={`p-2 rounded-md ${
+          activeShape === "move"
+            ? "bg-blue-500 text-white"
+            : "bg-gray-700 text-gray-200 hover:bg-gray-600"
+        }`}
+        title="Select and Move Objects"
+      >
+        <Move className="w-5 h-5" />
+      </button>
+
+      {/* Divider */}
+      <div className="border-t border-gray-600 my-1"></div>
+
+      {/* Color selectors */}
+      <button
+        onClick={() => setShowColorPicker((prev) => !prev)}
+        className="p-2 rounded-md bg-gray-700 text-gray-200 hover:bg-gray-600 relative"
+        title="Color Settings"
+      >
+        <div className="flex flex-col items-center">
+          <div
+            className="w-5 h-2.5 border border-white"
+            style={{ backgroundColor: strokeColor }}
+          ></div>
+          <div
+            className="w-5 h-2.5 border border-white"
+            style={{ backgroundColor: fillColor }}
+          ></div>
+        </div>
+      </button>
+
+      {/* Width selector */}
+      <button
+        onClick={() => setShowSettings((prev) => !prev)}
+        className="p-2 rounded-md bg-gray-700 text-gray-200 hover:bg-gray-600"
+        title={`Line Width: ${strokeWidth}`}
+      >
+        <div className="flex justify-center items-center">
+          <div
+            className="rounded-full bg-white"
+            style={{
+              width: `${Math.min(20, strokeWidth + 3)}px`,
+              height: `${Math.min(20, strokeWidth + 3)}px`,
+            }}
+          ></div>
+        </div>
+      </button>
+
+      {/* Clear button */}
+      <button
+        onClick={clearCanvas}
+        className="p-2 bg-red-900 text-red-300 rounded-md hover:bg-red-800 transition mt-auto"
+        title="Clear all shapes"
+      >
+        <Trash2 className="w-5 h-5" />
+      </button>
+
+      {/* Save button */}
+      <button
+        onClick={saveAndClose}
+        className="p-2 bg-green-900 text-green-300 rounded-md hover:bg-green-800 transition"
+        title="Save changes"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="20"
+          height="20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"></path>
+          <polyline points="17 21 17 13 7 13 7 21"></polyline>
+          <polyline points="7 3 7 8 15 8"></polyline>
+        </svg>
+      </button>
+
+      {/* Popovers for colors and settings */}
+      {showColorPicker && (
+        <div className="absolute left-full ml-2 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700">
+          <div className="flex flex-col gap-3 min-w-[150px]">
+            <div>
+              <label className="text-sm text-gray-300 block mb-1">Fill:</label>
+              <input
+                type="color"
+                value={fillColor}
+                onChange={(e) => setFillColor(e.target.value)}
+                className="w-full h-8 border-none rounded cursor-pointer"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-300 block mb-1">
+                Stroke:
+              </label>
+              <input
+                type="color"
+                value={strokeColor}
+                onChange={(e) => setStrokeColor(e.target.value)}
+                className="w-full h-8 border-none rounded cursor-pointer"
+              />
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Shape Tools */}
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => handleShapeSelect("line")}
-            className={`p-2 rounded-md ${
-              activeShape === "line"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
-            }`}
-            title="Draw Line"
-          >
-            <Pencil className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => handleShapeSelect("rectangle")}
-            className={`p-2 rounded-md ${
-              activeShape === "rectangle"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
-            }`}
-            title="Draw Rectangle"
-          >
-            <Square className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => handleShapeSelect("circle")}
-            className={`p-2 rounded-md ${
-              activeShape === "circle"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
-            }`}
-            title="Draw Circle"
-          >
-            <Circle className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => handleShapeSelect("polygon")}
-            className={`p-2 rounded-md ${
-              activeShape === "polygon"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
-            }`}
-            title="Draw Polygon (Double-click to finish)"
-          >
-            {/* Using a basic polygon shape instead of Pentagon */}
-            <svg
-              viewBox="0 0 24 24"
-              width="20"
-              height="20"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <polygon points="12 2 19 7 19 17 12 22 5 17 5 7" />
-            </svg>
-          </button>
-          <button
-            onClick={() => handleShapeSelect("text")}
-            className={`p-2 rounded-md ${
-              activeShape === "text"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
-            }`}
-            title="Add Text"
-          >
-            <Type className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => handleShapeSelect("move")}
-            className={`p-2 rounded-md ${
-              activeShape === "move"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
-            }`}
-            title="Select and Move Objects"
-          >
-            <Move className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Text Input (visible only when text tool is selected) */}
-        {activeShape === "text" && (
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={textInput}
-              onChange={(e) => setTextInput(e.target.value)}
-              placeholder="Enter text..."
-              className="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-            />
-          </div>
-        )}
-
-        {/* Color and Style Controls */}
-        <div className="flex flex-wrap gap-4">
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600 dark:text-gray-300">
-              Fill:
-            </label>
-            <input
-              type="color"
-              value={fillColor}
-              onChange={(e) => setFillColor(e.target.value)}
-              className="w-8 h-8 border-none rounded cursor-pointer"
-              title="Fill Color"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600 dark:text-gray-300">
-              Stroke:
-            </label>
-            <input
-              type="color"
-              value={strokeColor}
-              onChange={(e) => setStrokeColor(e.target.value)}
-              className="w-8 h-8 border-none rounded cursor-pointer"
-              title="Stroke Color"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600 dark:text-gray-300">
-              Width:
+      {showSettings && (
+        <div className="absolute left-full ml-2 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700">
+          <div className="min-w-[150px]">
+            <label className="text-sm text-gray-300 block mb-1">
+              Width: {strokeWidth}
             </label>
             <input
               type="range"
@@ -584,59 +626,87 @@ export default function DrawingTool({
               max="20"
               value={strokeWidth}
               onChange={(e) => setStrokeWidth(parseInt(e.target.value))}
-              className="w-24"
-              title="Stroke Width"
+              className="w-full"
             />
-            <span className="text-sm text-gray-600 dark:text-gray-300">
-              {strokeWidth}
-            </span>
           </div>
         </div>
+      )}
 
-        {/* Instructions */}
-        {activeShape === "polygon" && (
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Click to add polygon points. Double-click to finish.
+      {/* Text input (when text tool is active) */}
+      {activeShape === "text" && (
+        <div className="absolute left-full ml-2 top-0 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700">
+          <input
+            type="text"
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            placeholder="Enter text..."
+            className="w-[150px] p-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+            autoFocus
+          />
+        </div>
+      )}
+
+      {/* Help text for polygon */}
+      {activeShape === "polygon" && (
+        <div className="absolute left-full ml-2 bottom-0 bg-gray-800 p-2 rounded-lg shadow-lg border border-gray-700">
+          <p className="text-xs text-gray-400 whitespace-nowrap">
+            Click to add points.
+            <br />
+            Double-click to finish.
           </p>
-        )}
-      </div>
-    </div>
-  );
-
-  // Canvas UI for drawing
-  const canvasUI = (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl flex flex-col w-full max-w-4xl h-[80vh] overflow-hidden">
-        {/* Controls at top */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          {drawingControls}
         </div>
-
-        {/* Canvas */}
-        <div
-          className="flex-1 relative overflow-hidden bg-gray-100 dark:bg-gray-900"
-          ref={canvasWrapperRef}
-        >
-          <canvas id="drawing-canvas" className="absolute inset-0"></canvas>
-        </div>
-      </div>
+      )}
     </div>
   );
 
   return (
-    <>
-      <button
-        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition disabled:opacity-50"
-        onClick={handleDrawingButtonClick}
-        disabled={disabled || !imageDataUrl}
-      >
-        <Pencil className="w-4 h-4" /> Draw
-      </button>
+    <div className="relative">
+      {/* Drawing button with the toolbar */}
+      <div className="relative">
+        <button
+          className={`flex items-center gap-2 px-4 py-2 ${
+            activeShape ? "bg-blue-600" : "bg-green-600"
+          } text-white rounded-lg shadow hover:bg-opacity-90 transition disabled:opacity-50`}
+          onClick={handleDrawingButtonClick}
+          disabled={disabled || !imageDataUrl}
+          title={activeShape ? "Drawing mode active" : "Enable drawing mode"}
+        >
+          <Pencil className="w-4 h-4" />
+          {activeShape ? "Drawing" : "Draw"}
+        </button>
 
-      {/* Render canvas UI when showCanvas is true */}
-      {showCanvas &&
-        typeof window !== "undefined" &&
-        ReactDOM.createPortal(canvasUI, document.body)}
-    </>
+        {/* Vertical toolbar positioned to the right of the button */}
+        {verticalToolbar}
+      </div>
+
+      {/* Canvas container always present but only visible when needed */}
+      <div
+        className="w-full relative overflow-hidden"
+        ref={canvasWrapperRef}
+        style={{
+          minHeight: "300px",
+          display: canvasRef.current ? "block" : "none",
+        }}
+      >
+        <canvas id="drawing-canvas" className="absolute inset-0"></canvas>
+      </div>
+
+      {/* Text input for when it's needed outside the toolbar */}
+      {activeShape === "text" && showSettings && (
+        <div className="fixed bottom-4 left-4 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700 z-50">
+          <p className="text-xs text-gray-400 mb-1">
+            Click on the canvas to place text:
+          </p>
+          <input
+            type="text"
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            placeholder="Enter text here..."
+            className="w-[250px] p-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+            autoFocus
+          />
+        </div>
+      )}
+    </div>
   );
 }
