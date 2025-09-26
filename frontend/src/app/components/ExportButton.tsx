@@ -20,7 +20,7 @@ export default function ExportButton({
   return (
     <>
       <button
-        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition disabled:opacity-50"
+        className="flex items-center gap-2 px-4 py-2 bg-green-700 text-white cursor-pointer rounded-lg shadow hover:bg-green-800 transition disabled:opacity-50"
         onClick={() => setShowExportModal(true)}
         disabled={disabled}
       >
@@ -89,21 +89,21 @@ export default function ExportButton({
             </div>
             <div className="flex flex-wrap gap-3 justify-end">
               <button
-                className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-blue-700 text-white rounded shadow hover:bg-blue-800 disabled:opacity-50"
                 onClick={() => handleExport("png")}
                 disabled={!result}
               >
                 Download PNG
               </button>
               <button
-                className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-green-700 text-white rounded shadow hover:bg-green-800 disabled:opacity-50"
                 onClick={() => handleExport("jpg")}
                 disabled={!result}
               >
                 Download JPG
               </button>
               <button
-                className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-red-700 text-white rounded shadow hover:bg-red-800 disabled:opacity-50"
                 onClick={() => handleExport("pdf")}
                 disabled={!result}
               >

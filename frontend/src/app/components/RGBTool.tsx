@@ -155,7 +155,7 @@ export default function RGBTool({
   return (
     <>
       <button
-        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg shadow hover:bg-purple-700 transition disabled:opacity-50"
+        className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white cursor-pointer rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50"
         onClick={() => setShowSliders((v) => !v)}
         disabled={disabled || !imageDataUrl}
         aria-expanded={showSliders}

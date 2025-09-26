@@ -32,6 +32,43 @@ export default function DrawingTool({
   const startPointRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const polygonPointsRef = useRef<{ x: number; y: number }[]>([]);
 
+  // Function to get image preview element boundaries
+  const getImageBoundaries = useCallback(() => {
+    // Find the image element in the edit preview
+    const imageElements = document.querySelectorAll(
+      'img[alt="Edited"], img[alt="Preview"]'
+    );
+    const imageElement = imageElements[0] as HTMLImageElement;
+
+    if (!imageElement) return null;
+
+    const rect = imageElement.getBoundingClientRect();
+    return {
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      width: rect.width,
+      height: rect.height,
+    };
+  }, []);
+
+  // Function to check if a point is within the image boundaries
+  const isPointInImage = useCallback(
+    (clientX: number, clientY: number) => {
+      const boundaries = getImageBoundaries();
+      if (!boundaries) return false;
+
+      return (
+        clientX >= boundaries.left &&
+        clientX <= boundaries.right &&
+        clientY >= boundaries.top &&
+        clientY <= boundaries.bottom
+      );
+    },
+    [getImageBoundaries]
+  );
+
   // Initialize canvas when toolbar is shown or image changes
   useEffect(() => {
     // Only create canvas when toolbar is shown or shape is active
@@ -86,6 +123,13 @@ export default function DrawingTool({
     // @ts-expect-error - Fabric.js type definitions are incomplete
     const mouseDownHandler = (options) => {
       if (!activeShape || !canvas || options.target) return;
+
+      // Check if the click is within the image boundaries
+      const clientX = options.e.clientX;
+      const clientY = options.e.clientY;
+      if (!isPointInImage(clientX, clientY)) {
+        return; // Don't allow drawing outside the image
+      }
 
       const pointer = canvas.getPointer(options.e);
       isDrawingRef.current = true;
@@ -251,7 +295,7 @@ export default function DrawingTool({
       canvas.off("mouse:up", mouseUpHandler);
       canvas.off("mouse:dblclick", dblClickHandler);
     };
-  }, [activeShape, fillColor, strokeColor, strokeWidth]);
+  }, [activeShape, fillColor, strokeColor, strokeWidth, isPointInImage]);
 
   // Add text on click when text tool is active
   useEffect(() => {
@@ -265,6 +309,13 @@ export default function DrawingTool({
 
       // Only add text if clicking on empty canvas area
       if (options.target) return;
+
+      // Check if the click is within the image boundaries
+      const clientX = options.e.clientX;
+      const clientY = options.e.clientY;
+      if (!isPointInImage(clientX, clientY)) {
+        return; // Don't allow text placement outside the image
+      }
 
       const pointer = canvas.getPointer(options.e);
       const text = new fabric.Textbox(textInput, {
@@ -287,7 +338,7 @@ export default function DrawingTool({
         canvas.off("mouse:down", addTextHandler);
       };
     }
-  }, [activeShape, textInput, strokeColor]);
+  }, [activeShape, textInput, strokeColor, isPointInImage]);
 
   // Handle move mode
   useEffect(() => {
@@ -375,36 +426,38 @@ export default function DrawingTool({
     setActiveShape(null);
   }, [saveCanvasImage]);
 
-  // Handle click outside toolbar
+  // Handle click outside toolbar and image
   const handleClickOutside = useCallback(
     (event: MouseEvent) => {
-      if (
-        toolbarRef.current &&
-        !toolbarRef.current.contains(event.target as Node)
-      ) {
-        // Close color picker and settings if open
-        setShowColorPicker(false);
-        setShowSettings(false);
+      const target = event.target as Node;
 
-        // If clicked outside toolbar but on canvas, keep drawing
-        if (
-          canvasWrapperRef.current &&
-          canvasWrapperRef.current.contains(event.target as Node)
-        ) {
-          return;
-        }
+      // Don't close if clicking on toolbar
+      if (toolbarRef.current && toolbarRef.current.contains(target)) {
+        return;
+      }
 
-        // If we have an active shape and clicked elsewhere, save changes
+      // Close color picker and settings if open
+      setShowColorPicker(false);
+      setShowSettings(false);
+
+      // Check if clicked within the image preview area
+      const clientX = event.clientX;
+      const clientY = event.clientY;
+      const isInImage = isPointInImage(clientX, clientY);
+
+      // If clicked outside the image preview area, close the drawing tools
+      if (!isInImage) {
+        // If we have an active shape and clicked outside image, save changes
         if (activeShape) {
           saveCanvasImage();
           setActiveShape(null);
         }
-
-        // Close toolbar when clicking outside
+        // Close toolbar when clicking outside image
         setShowToolbar(false);
       }
+      // If clicked inside image, keep drawing tools open
     },
-    [activeShape, saveCanvasImage]
+    [activeShape, saveCanvasImage, isPointInImage]
   );
 
   // Set up click outside detection
@@ -672,9 +725,9 @@ export default function DrawingTool({
       {/* Drawing button with the toolbar */}
       <div className="relative inline-block">
         <button
-          className={`flex items-center gap-2 px-4 py-2 ${
-            activeShape ? "bg-blue-600" : "bg-green-600"
-          } text-white rounded-lg shadow hover:bg-opacity-90 transition disabled:opacity-50`}
+          className={`flex items-center gap-2 px-4 py-2 cursor-pointer ${
+            activeShape ? "bg-gray-700" : "bg-gray-600"
+          } text-white rounded-lg shadow hover:bg-gray-800 transition disabled:opacity-50`}
           onClick={handleDrawingButtonClick}
           disabled={disabled || !imageDataUrl}
           title={activeShape ? "Drawing mode active" : "Enable drawing mode"}
