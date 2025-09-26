@@ -31,3 +31,4 @@ This repository uses GitHub Copilot to assist with code generation and suggestio
 - Collaborate effectively with other developers by suggesting code that is easy to understand and integrate.
 - Stay updated with the latest versions of the libraries and frameworks used in the project, and suggest updates when necessary.
 - fix any issues in the codebase as they arise, ensuring the project remains stable and functional.
+- always check for errors in the modified files and fix them before proceeding with the next suggestion.

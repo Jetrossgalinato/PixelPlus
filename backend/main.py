@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api_grayscale import convert_to_grayscale
+from api_rgb import router as rgb_router
 
 app = FastAPI()
 
@@ -12,7 +13,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.add_api_route("/grayscale/", convert_to_grayscale, methods=["POST"])
+
+app.include_router(rgb_router)
 
 @app.get("/")
 def read_root():
