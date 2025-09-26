@@ -10,7 +10,7 @@ This repository uses GitHub Copilot to assist with code generation and suggestio
 
 ## Monorepo Structure
 
-- `frontend/` - Contains the Next.js and Electron application.
+- `frontend/` - Contains the Next.js + TypeScript and Electron application.
 - `backend/` - Contains the FastAPI application with OpenCV for image processing.
 
 ## Activate always during prompting

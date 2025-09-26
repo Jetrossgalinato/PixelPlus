@@ -12,6 +12,7 @@
     "dev:desktop": "concurrently \"next dev --port 3000\" \"wait-on http://localhost:3000 && electron .\""
   },
   "dependencies": {
+    "fabric": "^6.7.1",
     "jspdf": "^3.0.3",
     "lucide-react": "^0.544.0",
     "next": "15.5.4",
@@ -24,6 +25,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/fabric": "^5.3.6",
     "concurrently": "^9.2.1",
     "electron": "^38.1.2",
     "eslint": "^9",

@@ -86,7 +86,7 @@ export function GrayscaleTool({
   return (
     <div className={className}>
       <button
-        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition disabled:opacity-50"
+        className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white cursor-pointer rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50"
         onClick={handleGrayscale}
         disabled={processing || disabled || !imageFile}
       >

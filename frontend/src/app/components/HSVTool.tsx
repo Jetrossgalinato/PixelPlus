@@ -3,17 +3,20 @@ import { useState, useRef, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { SlidersHorizontal } from "lucide-react";
 
-type RGBToolProps = {
+type HSVToolProps = {
   imageDataUrl: string | null;
   onResult: (url: string, originalForUndo?: string) => void;
   disabled?: boolean;
   className?: string;
-  resetSlidersSignal?: number; // increment to trigger reset
+  resetSlidersSignal?: {
+    counter: number;
+    values: { h: number; s: number; v: number };
+  };
   layout?: "vertical" | "horizontal";
   popoutSliders?: boolean;
 };
 
-export default function RGBTool({
+export default function HSVTool({
   imageDataUrl,
   onResult,
   disabled,
@@ -21,7 +24,7 @@ export default function RGBTool({
   popoutSliders = false,
   showSliders: showSlidersProp,
   setShowSliders: setShowSlidersProp,
-}: RGBToolProps & {
+}: HSVToolProps & {
   showSliders?: boolean;
   setShowSliders?: (show: boolean) => void;
 }) {
@@ -32,23 +35,25 @@ export default function RGBTool({
     setShowSlidersProp !== undefined
       ? setShowSlidersProp
       : internalSetShowSliders;
-  const [r, setR] = useState(1);
-  const [g, setG] = useState(1);
-  const [b, setB] = useState(1);
-  // Reset sliders to default when resetSlidersSignal changes
+  const [h, setH] = useState(0);
+  const [s, setS] = useState(1);
+  const [v, setV] = useState(1);
+
+  // Reset sliders to specific values when resetSlidersSignal changes (do NOT auto-apply HSV)
   useEffect(() => {
-    setR(1);
-    setG(1);
-    setB(1);
-    // Optionally re-apply RGB with defaults if an image is loaded
-    if (imageDataUrl) applyRGB(1, 1, 1);
+    if (!resetSlidersSignal) return;
+    const { h: newH, s: newS, v: newV } = resetSlidersSignal.values;
+    setH(newH);
+    setS(newS);
+    setV(newV);
+    // Do NOT call applyHSV here; parent is responsible for image state
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetSlidersSignal]);
+  }, [resetSlidersSignal?.counter]);
 
   // Handle click outside to close modal
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      const anchorElement = document.getElementById("rgb-slider-popout-anchor");
+      const anchorElement = document.getElementById("hsv-slider-popout-anchor");
       const target = event.target as Node;
 
       // Check if click was outside both the sliders and the anchor element
@@ -74,13 +79,12 @@ export default function RGBTool({
   const [error, setError] = useState<string | null>(null);
   const lastUrl = useRef<string | null>(null);
 
-  // Apply RGB adjustment using backend
-  const applyRGB = async (r: number, g: number, b: number) => {
+  // Apply HSV adjustment using backend
+  const applyHSV = async (h: number, s: number, v: number) => {
     if (!imageDataUrl) return;
     setProcessing(true);
     setError(null);
     try {
-      // Convert data URL to File
       const res = await fetch(imageDataUrl);
       const blob = await res.blob();
       const file = new File([blob], "image.png", { type: blob.type });
@@ -88,7 +92,7 @@ export default function RGBTool({
       formData.append("file", file);
       // Send to backend
       const apiRes = await fetch(
-        `http://localhost:8000/rgb/?r=${r}&g=${g}&b=${b}`,
+        `http://localhost:8000/hsv/?h=${h}&s=${s}&v=${v}`,
         {
           method: "POST",
           body: formData,
@@ -107,56 +111,54 @@ export default function RGBTool({
     }
   };
 
-  // When sliders change, update image
-  function handleSliderChange(newR: number, newG: number, newB: number) {
-    setR(newR);
-    setG(newG);
-    setB(newB);
-    applyRGB(newR, newG, newB);
+  function handleSliderChange(newH: number, newS: number, newV: number) {
+    setH(newH);
+    setS(newS);
+    setV(newV);
+    applyHSV(newH, newS, newV);
   }
 
-  // Sliders UI component
-  const slidersUI = (
+  const sliders = (
     <div
-      id="rgb-sliders"
+      id="hsv-sliders"
       className="flex flex-col gap-2 bg-white dark:bg-gray-900 p-4 rounded shadow max-w-xs border border-gray-200 dark:border-gray-700"
       style={{ minWidth: 200 }}
     >
       <label className="flex flex-col text-xs text-gray-700 dark:text-gray-200">
-        Red:
+        Hue:
         <input
           type="range"
-          min={0}
-          max={2}
-          step={0.01}
-          value={r}
-          onChange={(e) => handleSliderChange(Number(e.target.value), g, b)}
+          min={-180}
+          max={180}
+          step={1}
+          value={h}
+          onChange={(e) => handleSliderChange(Number(e.target.value), s, v)}
         />
-        <span className="text-xs">{r.toFixed(2)}</span>
+        <span className="text-xs">{h}</span>
       </label>
       <label className="flex flex-col text-xs text-gray-700 dark:text-gray-200">
-        Green:
+        Saturation:
         <input
           type="range"
           min={0}
           max={2}
           step={0.01}
-          value={g}
-          onChange={(e) => handleSliderChange(r, Number(e.target.value), b)}
+          value={s}
+          onChange={(e) => handleSliderChange(h, Number(e.target.value), v)}
         />
-        <span className="text-xs">{g.toFixed(2)}</span>
+        <span className="text-xs">{s.toFixed(2)}</span>
       </label>
       <label className="flex flex-col text-xs text-gray-700 dark:text-gray-200">
-        Blue:
+        Value:
         <input
           type="range"
           min={0}
           max={2}
           step={0.01}
-          value={b}
-          onChange={(e) => handleSliderChange(r, g, Number(e.target.value))}
+          value={v}
+          onChange={(e) => handleSliderChange(h, s, Number(e.target.value))}
         />
-        <span className="text-xs">{b.toFixed(2)}</span>
+        <span className="text-xs">{v.toFixed(2)}</span>
       </label>
     </div>
   );
@@ -168,20 +170,20 @@ export default function RGBTool({
         onClick={() => setShowSliders(!showSliders)}
         disabled={disabled || !imageDataUrl}
         aria-expanded={showSliders}
-        aria-controls="rgb-sliders"
+        aria-controls="hsv-sliders"
         style={{ marginBottom: 0 }}
       >
-        <SlidersHorizontal className="w-4 h-4" /> RGB
+        <SlidersHorizontal className="w-4 h-4" /> HSV
       </button>
-
-      {/* Render sliders outside sidebar using portal if popoutSliders is true */}
       {popoutSliders && showSliders
-        ? ReactDOM.createPortal(
-            <div className="rgb-slider-container">{slidersUI}</div>,
-            document.getElementById("rgb-slider-popout-anchor") as HTMLElement
-          )
-        : showSliders && slidersUI}
-
+        ? typeof window !== "undefined" &&
+          document.getElementById("hsv-slider-popout-anchor")
+          ? ReactDOM.createPortal(
+              <div className="hsv-slider-container">{sliders}</div>,
+              document.getElementById("hsv-slider-popout-anchor") as HTMLElement
+            )
+          : null
+        : showSliders && sliders}
       {processing && (
         <div className="mt-1 text-xs text-gray-500 flex items-center gap-1">
           Processing...

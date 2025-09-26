@@ -1,21 +1,37 @@
 "use client";
 import Image from "next/image";
 
-import { Loader2, ArrowLeft, Download, RotateCcw } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
+import UndoButton from "../components/UndoButton";
+import ExportButton from "../components/ExportButton";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import GrayscaleTool from "../components/GrayscaleTool";
 import RGBTool from "../components/RGBTool";
+import HSVTool from "../components/HSVTool";
+import DrawingTool from "../components/DrawingTool";
 import { useImage } from "../ImageContext";
 
 export default function EditPage() {
-  const [showExportModal, setShowExportModal] = useState(false);
   const router = useRouter();
   const { image } = useImage();
   const [processing] = useState(false); // retained for future multi-tool orchestration
+  // Track which slider modal is open: "hsv", "rgb", or null
+  const [openSlider, setOpenSlider] = useState<null | "hsv" | "rgb">(null);
   const [result, setResult] = useState<string | null>(null);
   const prevResultUrl = useRef<string | null>(null);
-  const [undoStack, setUndoStack] = useState<string[]>([]);
+  // Track both image and HSV slider state
+  const [undoStack, setUndoStack] = useState<
+    { url: string; hsv: { h: number; s: number; v: number } }[]
+  >([]); // For resetting to original
+  const [editHistory, setEditHistory] = useState<
+    { url: string; hsv: { h: number; s: number; v: number } }[]
+  >([]); // For step-by-step undo
+  const [hsvSlider, setHsvSlider] = useState<{
+    h: number;
+    s: number;
+    v: number;
+  }>({ h: 0, s: 1, v: 1 });
 
   // Restore edit preview from localStorage on mount
   useEffect(() => {
@@ -23,34 +39,81 @@ export default function EditPage() {
     if (saved) {
       setResult(saved);
     }
-    // Always start with empty undo stack on mount (or new image)
     setUndoStack([]);
+    setHsvSlider({ h: 0, s: 1, v: 1 });
   }, [image.dataUrl, image.fileName]);
   // Removed unused showComparison for performance cleanliness
   const [error] = useState<string | null>(null);
 
   // For resetting RGB sliders on Undo
   const [rgbResetSignal, setRgbResetSignal] = useState(0);
+  const [hsvResetSignal, setHsvResetSignal] = useState(0);
 
-  // Receive grayscale or RGB result from tool component
+  // Receive grayscale or RGB/HSV result from tool component
   const handleEditResult = useCallback(
-    (url: string, originalForUndo?: string) => {
-      if (!result && originalForUndo) setUndoStack([originalForUndo]);
+    (
+      url: string,
+      originalForUndo?: string,
+      sliderValues?: {
+        type: "hsv";
+        values: { h: number; s: number; v: number };
+      }
+    ) => {
+      // Save current result and slider state to history before applying new edit
+      if (result) {
+        setEditHistory((prev) => [...prev, { url: result, hsv: hsvSlider }]);
+      } else if (originalForUndo) {
+        // If this is the first edit, save original
+        setUndoStack([{ url: originalForUndo, hsv: { h: 0, s: 1, v: 1 } }]);
+      }
+      if (sliderValues && sliderValues.type === "hsv") {
+        setHsvSlider(sliderValues.values);
+      }
       setResult(url);
     },
-    [result]
+    [result, hsvSlider]
   );
 
   // Back to default (original) handler
-  const handleBackToDefault = () => {
+  const handleBackToDefault = useCallback(() => {
     setRgbResetSignal((s) => s + 1); // trigger RGBTool slider reset
+    setHsvResetSignal((s) => s + 1); // trigger HSVTool slider reset
     if (undoStack.length > 0) {
-      setResult(undoStack[0]);
+      setResult(undoStack[0].url);
+      setHsvSlider(undoStack[0].hsv);
       setUndoStack([]);
     } else if (image.dataUrl) {
       setResult(null); // will show original placeholder
+      setHsvSlider({ h: 0, s: 1, v: 1 });
     }
-  };
+    setEditHistory([]);
+  }, [undoStack, image.dataUrl]);
+
+  // Undo last edit - goes back one step in edit history
+  const undoLastEdit = useCallback(() => {
+    if (editHistory.length > 0) {
+      // Get the previous state from history
+      const newHistory = [...editHistory];
+      const previousState = newHistory.pop();
+
+      setEditHistory(newHistory);
+      if (previousState) {
+        setResult(previousState.url);
+        setHsvSlider(previousState.hsv);
+        setHsvResetSignal((s) => s + 1); // trigger HSVTool slider reset
+      } else if (undoStack.length > 0) {
+        setResult(undoStack[0].url);
+        setHsvSlider(undoStack[0].hsv);
+        setHsvResetSignal((s) => s + 1);
+      } else {
+        setResult(null);
+        setHsvSlider({ h: 0, s: 1, v: 1 });
+        setHsvResetSignal((s) => s + 1);
+      }
+    } else if (result) {
+      handleBackToDefault();
+    }
+  }, [editHistory, result, undoStack, handleBackToDefault]);
 
   // Cleanup object URL on unmount
   useEffect(() => {
@@ -92,7 +155,7 @@ export default function EditPage() {
   return (
     <div className="min-h-screen flex flex-row bg-gradient-to-br from-gray-50 to-gray-200 dark:from-gray-900 dark:to-gray-800 relative">
       <aside
-        className="h-screen w-40 min-w-[160px] bg-white/70 dark:bg-gray-900/70 border-r border-gray-200 dark:border-gray-800 flex flex-col items-start py-8 gap-0 shadow-xl z-10 relative backdrop-blur-md"
+        className="h-screen w-45 min-w-[200px] bg-white/70 dark:bg-gray-900/70 border-r border-gray-200 dark:border-gray-800 flex flex-col items-start py-8 gap-0 shadow-xl z-10 relative backdrop-blur-md"
         style={{ boxShadow: "0 4px 32px 0 rgba(0,0,0,0.10)" }}
       >
         {/* Back button at very top, left-aligned */}
@@ -123,6 +186,26 @@ export default function EditPage() {
           </div>
           {/* Divider */}
           <div className="w-10 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          {/* HSV Tool Button */}
+          <div className="w-full flex flex-col items-start">
+            <HSVTool
+              imageDataUrl={result || image.dataUrl}
+              onResult={handleEditResult}
+              disabled={processing || !(result || image.dataUrl)}
+              resetSlidersSignal={{
+                counter: hsvResetSignal,
+                values: hsvSlider,
+              }}
+              layout="horizontal"
+              popoutSliders={true}
+              showSliders={openSlider === "hsv"}
+              setShowSliders={(show: boolean) =>
+                setOpenSlider(show ? "hsv" : null)
+              }
+            />
+          </div>
+          {/* Divider */}
+          <div className="w-10 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
           {/* RGB Tool Button */}
           <div className="w-full flex flex-col items-start">
             <RGBTool
@@ -132,6 +215,20 @@ export default function EditPage() {
               resetSlidersSignal={rgbResetSignal}
               layout="horizontal"
               popoutSliders={true}
+              showSliders={openSlider === "rgb"}
+              setShowSliders={(show: boolean) =>
+                setOpenSlider(show ? "rgb" : null)
+              }
+            />
+          </div>
+          {/* Divider */}
+          <div className="w-10 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          {/* Drawing Tool Button */}
+          <div className="w-full flex flex-col items-start">
+            <DrawingTool
+              imageDataUrl={result || image.dataUrl}
+              onResult={handleEditResult}
+              disabled={processing || !(result || image.dataUrl)}
             />
           </div>
           {/* Divider */}
@@ -142,30 +239,40 @@ export default function EditPage() {
       </aside>
       {/* Main content area shifted right */}
       <main className="flex-1 flex flex-col items-center px-8 py-8">
+        {/* HSV slider popout anchor - positioned outside sidebar */}
+        {/* HSV slider popout anchor - positioned outside sidebar */}
+        {openSlider !== "rgb" && (
+          <div
+            id="hsv-slider-popout-anchor"
+            className="absolute left-44 z-20"
+            style={{ top: "250px", minWidth: "250px", minHeight: "150px" }}
+          ></div>
+        )}
         {/* RGB slider popout anchor - positioned outside sidebar */}
-        <div
-          id="rgb-slider-popout-anchor"
-          className="absolute left-44 z-20"
-          style={{ top: "250px" }}
-        ></div>
+        {openSlider !== "hsv" && (
+          <div
+            id="rgb-slider-popout-anchor"
+            className="absolute left-44 z-10"
+            style={{
+              top: "350px",
+              minWidth: "250px",
+              minHeight: "150px",
+              zIndex: 10,
+            }}
+          ></div>
+        )}
         {/* Undo and Export buttons at top corners */}
         <div className="w-full flex justify-between items-start mb-2">
-          <button
-            className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50"
-            onClick={handleBackToDefault}
+          <UndoButton
+            onClick={undoLastEdit}
+            disabled={!result && editHistory.length === 0}
+          />
+          <ExportButton
             disabled={!result}
-            style={{ minWidth: 60 }}
-            title="Undo all edits"
-          >
-            <RotateCcw className="w-4 h-4" /> Undo
-          </button>
-          <button
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition disabled:opacity-50"
-            onClick={() => setShowExportModal(true)}
-            disabled={!result}
-          >
-            <Download className="w-4 h-4" /> Export
-          </button>
+            imageDataUrl={image.dataUrl}
+            result={result}
+            handleExport={handleExport}
+          />
         </div>
         <h1 className="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-gray-100">
           Edit Image
@@ -212,99 +319,7 @@ export default function EditPage() {
         {error && <div className="mt-2 text-xs text-red-500">{error}</div>}
       </main>
 
-      {showExportModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Export comparison"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setShowExportModal(false);
-          }}
-        >
-          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-6xl w-full p-6 relative">
-            <button
-              onClick={() => setShowExportModal(false)}
-              className="absolute top-3 right-3 text-sm text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
-              aria-label="Close export modal"
-            >
-              ✕
-            </button>
-            <h3 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100">
-              Export & Comparison
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div className="flex flex-col items-center">
-                <h4 className="mb-2 font-medium text-gray-600 dark:text-gray-300">
-                  Original
-                </h4>
-                {image.dataUrl ? (
-                  <Image
-                    src={image.dataUrl}
-                    alt="Original"
-                    width={800}
-                    height={800}
-                    unoptimized
-                    className="rounded border border-gray-200 dark:border-gray-700 object-contain max-h-[600px]"
-                  />
-                ) : (
-                  <div className="w-full h-40 flex items-center justify-center text-gray-400">
-                    No image
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-col items-center">
-                <h4 className="mb-2 font-medium text-gray-600 dark:text-gray-300">
-                  Edited
-                </h4>
-                {result ? (
-                  <Image
-                    src={result}
-                    alt="Edited"
-                    width={800}
-                    height={800}
-                    unoptimized
-                    className="rounded border border-gray-200 dark:border-gray-700 object-contain max-h-[600px]"
-                  />
-                ) : (
-                  <div className="w-full h-40 flex items-center justify-center text-gray-400">
-                    No edit preview
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-3 justify-end">
-              <button
-                className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 disabled:opacity-50"
-                onClick={() => handleExport("png")}
-                disabled={!result}
-              >
-                Download PNG
-              </button>
-              <button
-                className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 disabled:opacity-50"
-                onClick={() => handleExport("jpg")}
-                disabled={!result}
-              >
-                Download JPG
-              </button>
-              <button
-                className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 disabled:opacity-50"
-                onClick={() => handleExport("pdf")}
-                disabled={!result}
-              >
-                Download PDF
-              </button>
-              <button
-                className="px-4 py-2 bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded shadow hover:bg-gray-400 dark:hover:bg-gray-600"
-                onClick={() => setShowExportModal(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Export modal is now handled inside ExportButton */}
     </div>
   );
 }

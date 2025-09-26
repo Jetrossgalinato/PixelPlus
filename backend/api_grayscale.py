@@ -1,12 +1,12 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import StreamingResponse
 import cv2
 import numpy as np
 import io
 
-app = FastAPI()
+router = APIRouter()
 
-@app.post("/grayscale/")
+@router.post("/grayscale/")
 def convert_to_grayscale(file: UploadFile = File(...)):
     # Read image file as bytes
     image_bytes = file.file.read()
