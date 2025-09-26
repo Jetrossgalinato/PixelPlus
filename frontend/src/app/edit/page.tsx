@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import GrayscaleTool from "../components/GrayscaleTool";
 import RGBTool from "../components/RGBTool";
+import HSVTool from "../components/HSVTool";
 import { useImage } from "../ImageContext";
 
 export default function EditPage() {
@@ -124,6 +125,19 @@ export default function EditPage() {
           </div>
           {/* Divider */}
           <div className="w-10 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          {/* HSV Tool Button */}
+          <div className="w-full flex flex-col items-start">
+            <HSVTool
+              imageDataUrl={result || image.dataUrl}
+              onResult={handleEditResult}
+              disabled={processing || !(result || image.dataUrl)}
+              resetSlidersSignal={rgbResetSignal}
+              layout="horizontal"
+              popoutSliders={true}
+            />
+          </div>
+          {/* Divider */}
+          <div className="w-10 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
           {/* RGB Tool Button */}
           <div className="w-full flex flex-col items-start">
             <RGBTool
@@ -143,11 +157,17 @@ export default function EditPage() {
       </aside>
       {/* Main content area shifted right */}
       <main className="flex-1 flex flex-col items-center px-8 py-8">
+        {/* HSV slider popout anchor - positioned outside sidebar */}
+        <div
+          id="hsv-slider-popout-anchor"
+          className="absolute left-44 z-20"
+          style={{ top: "250px" }}
+        ></div>
         {/* RGB slider popout anchor - positioned outside sidebar */}
         <div
           id="rgb-slider-popout-anchor"
           className="absolute left-44 z-20"
-          style={{ top: "250px" }}
+          style={{ top: "350px" }}
         ></div>
         {/* Undo and Export buttons at top corners */}
         <div className="w-full flex justify-between items-start mb-2">
