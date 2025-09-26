@@ -5,6 +5,7 @@ import { Loader2, ArrowLeft, Download, RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import GrayscaleTool from "../components/GrayscaleTool";
+import RGBTool from "../components/RGBTool";
 import { useImage } from "../ImageContext";
 
 export default function EditPage() {
@@ -74,8 +75,11 @@ export default function EditPage() {
   // Removed unused showComparison for performance cleanliness
   const [error] = useState<string | null>(null);
 
-  // Receive grayscale result from tool component
-  const handleGrayscaleResult = useCallback(
+  // For resetting RGB sliders on Undo
+  const [rgbResetSignal, setRgbResetSignal] = useState(0);
+
+  // Receive grayscale or RGB result from tool component
+  const handleEditResult = useCallback(
     (url: string, originalForUndo?: string) => {
       if (!result && originalForUndo) setUndoStack([originalForUndo]);
       setResult(url);
@@ -85,6 +89,7 @@ export default function EditPage() {
 
   // Back to default (original) handler
   const handleBackToDefault = () => {
+    setRgbResetSignal((s) => s + 1); // trigger RGBTool slider reset
     if (undoStack.length > 0) {
       setResult(undoStack[0]);
       setUndoStack([]);
@@ -130,88 +135,133 @@ export default function EditPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-200 dark:from-gray-900 dark:to-gray-800 p-4 relative">
-      {/* Back button top left */}
-      <button
-        className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:text-blue-800 font-medium mb-4 w-fit"
-        onClick={() => router.push("/")}
-        style={{ position: "absolute", top: 24, left: 24, zIndex: 20 }}
+    <div className="min-h-screen flex flex-row bg-gradient-to-br from-gray-50 to-gray-200 dark:from-gray-900 dark:to-gray-800 relative">
+      <aside
+        className="h-screen w-40 min-w-[160px] bg-white/70 dark:bg-gray-900/70 border-r border-gray-200 dark:border-gray-800 flex flex-col items-start py-8 gap-0 shadow-xl z-10 relative backdrop-blur-md"
+        style={{ boxShadow: "0 4px 32px 0 rgba(0,0,0,0.10)" }}
       >
-        <ArrowLeft className="w-5 h-5" /> Back to Upload
-      </button>
-
-      {/* Export button triggers modal */}
-      <div style={{ position: "absolute", top: 24, right: 24, zIndex: 20 }}>
+        {/* Back button at very top, left-aligned */}
         <button
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition disabled:opacity-50"
-          onClick={() => setShowExportModal(true)}
-          disabled={!result}
+          className="flex items-center gap-2 px-3 py-2 text-blue-600 hover:text-blue-800 font-medium mb-6 w-10 h-10 justify-start rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900 transition ml-4"
+          onClick={() => router.push("/")}
+          style={{ zIndex: 20 }}
+          title="Back to Upload"
         >
-          <Download className="w-4 h-4" /> Export
+          <ArrowLeft className="w-5 h-5" />
         </button>
-      </div>
-      <h1 className="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-gray-100 self-center">
-        Edit Image
-      </h1>
-      {/* Single large edit preview */}
-      <div className="flex flex-col items-center w-full max-w-4xl self-center mt-8">
-        <h2 className="mb-2 text-lg font-semibold text-gray-700 dark:text-gray-200">
-          Edit Preview
-        </h2>
-        {result ? (
-          <Image
-            src={result}
-            alt="Edited"
-            width={1400}
-            height={1400}
-            unoptimized
-            className="rounded-lg shadow max-h-[1400px] object-contain border border-gray-200 dark:border-gray-700"
-          />
-        ) : image.dataUrl ? (
-          <Image
-            src={image.dataUrl}
-            alt="Preview"
-            width={1400}
-            height={1400}
-            unoptimized
-            className="rounded-lg shadow max-h-[1400px] object-contain border border-gray-200 dark:border-gray-700 opacity-50"
-          />
-        ) : (
-          <div className="w-full h-64 flex items-center justify-center text-gray-400">
-            No image
+        {/* Sidebar label */}
+        <div className="w-full px-4 mb-6">
+          <span className="text-xs font-semibold tracking-widest text-gray-500 dark:text-gray-400 uppercase">
+            Tools
+          </span>
+        </div>
+        {/* Tools, all left-aligned */}
+        <div className="w-full flex flex-col items-start gap-4 px-4">
+          {/* Grayscale Tool Button */}
+          <div className="w-full flex flex-col items-start">
+            <GrayscaleTool
+              imageFile={image.file}
+              originalDataUrl={image.dataUrl}
+              onResult={handleEditResult}
+              disabled={processing}
+            />
+            <span
+              className="text-xs text-gray-600 dark:text-gray-400 mt-1 ml-1"
+              title="Convert to grayscale"
+            >
+              Grayscale
+            </span>
           </div>
-        )}
-      </div>
-      {/* Show comparison only after export - removed as requested */}
-      {/* Editing options bar */}
-      <div className="flex flex-row flex-wrap gap-4 justify-center items-center mt-10 mb-2 self-center relative">
-        <GrayscaleTool
-          imageFile={image.file}
-          originalDataUrl={image.dataUrl}
-          onResult={handleGrayscaleResult}
-          disabled={processing}
-        />
-        <button
-          className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50"
-          onClick={handleBackToDefault}
-          disabled={!result}
-        >
-          <RotateCcw className="w-4 h-4" /> Undo
-        </button>
+          {/* Divider */}
+          <div className="w-10 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          {/* RGB Tool Button */}
+          <div className="w-full flex flex-col items-start">
+            <RGBTool
+              imageDataUrl={result || image.dataUrl}
+              onResult={handleEditResult}
+              disabled={processing || !(result || image.dataUrl)}
+              resetSlidersSignal={rgbResetSignal}
+              layout="horizontal"
+            />
+            <span
+              className="text-xs text-gray-600 dark:text-gray-400 mt-1 ml-1"
+              title="Adjust RGB channels"
+            >
+              RGB
+            </span>
+          </div>
+          {/* Divider */}
+          <div className="w-10 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          {/* Undo Button */}
+          <button
+            className="flex items-center gap-2 px-3 py-2 h-10 w-10 bg-gray-500 text-white rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50 justify-start ml-1"
+            onClick={handleBackToDefault}
+            disabled={!result}
+            style={{ minWidth: 40 }}
+            title="Undo all edits"
+          >
+            <RotateCcw className="w-5 h-5" />
+          </button>
+        </div>
+        {/* Spacer to push content to top */}
+        <div className="flex-1" />
+      </aside>
+      {/* Main content area shifted right */}
+      <main className="flex-1 flex flex-col items-center px-8 py-8">
+        {/* Export button top right */}
+        <div className="w-full flex justify-end mb-2">
+          <button
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition disabled:opacity-50"
+            onClick={() => setShowExportModal(true)}
+            disabled={!result}
+          >
+            <Download className="w-4 h-4" /> Export
+          </button>
+        </div>
+        <h1 className="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-gray-100">
+          Edit Image
+        </h1>
+        {/* Single large edit preview */}
+        <div className="flex flex-col items-center w-full max-w-4xl mt-4">
+          <h2 className="mb-2 text-lg font-semibold text-gray-700 dark:text-gray-200">
+            Edit Preview
+          </h2>
+          {result ? (
+            <Image
+              src={result}
+              alt="Edited"
+              width={1400}
+              height={1400}
+              unoptimized
+              className="rounded-lg shadow max-h-[1400px] object-contain border border-gray-200 dark:border-gray-700"
+            />
+          ) : image.dataUrl ? (
+            <Image
+              src={image.dataUrl}
+              alt="Preview"
+              width={1400}
+              height={1400}
+              unoptimized
+              className="rounded-lg shadow max-h-[1400px] object-contain border border-gray-200 dark:border-gray-700 opacity-50"
+            />
+          ) : (
+            <div className="w-full h-64 flex items-center justify-center text-gray-400">
+              No image
+            </div>
+          )}
+        </div>
         {processing && (
-          <div className="absolute -bottom-8 text-xs text-gray-500 flex items-center gap-1">
+          <div className="mt-4 text-xs text-gray-500 flex items-center gap-1">
             <Loader2 className="w-3 h-3 animate-spin" /> Processing...
           </div>
         )}
-      </div>
-      {!image.file && (
-        <div className="mt-2 text-xs text-red-500 self-center">
-          Image not ready for processing. Try re-uploading.
-        </div>
-      )}
-      {error && (
-        <div className="mt-2 text-xs text-red-500 self-center">{error}</div>
-      )}
+        {!image.file && (
+          <div className="mt-2 text-xs text-red-500">
+            Image not ready for processing. Try re-uploading.
+          </div>
+        )}
+        {error && <div className="mt-2 text-xs text-red-500">{error}</div>}
+      </main>
 
       {showExportModal && (
         <div
