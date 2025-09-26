@@ -24,6 +24,8 @@ export default function HSVTool({
   const [h, setH] = useState(0);
   const [s, setS] = useState(1);
   const [v, setV] = useState(1);
+
+  // Reset sliders to default when resetSlidersSignal changes
   useEffect(() => {
     setH(0);
     setS(1);
@@ -31,6 +33,32 @@ export default function HSVTool({
     if (imageDataUrl) applyHSV(0, 1, 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetSlidersSignal]);
+
+  // Handle click outside to close modal
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const anchorElement = document.getElementById("hsv-slider-popout-anchor");
+      const target = event.target as Node;
+
+      // Check if click was outside both the sliders and the anchor element
+      if (showSliders && popoutSliders && anchorElement) {
+        // Find the first child of the anchor (the slider container)
+        const sliderContainer = anchorElement.firstChild as Node;
+
+        // If the click wasn't on the sliders, close them
+        if (sliderContainer && !sliderContainer.contains(target)) {
+          setShowSliders(false);
+        }
+      }
+    }
+
+    if (showSliders && popoutSliders) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [showSliders, popoutSliders]);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastUrl = useRef<string | null>(null);
@@ -135,7 +163,7 @@ export default function HSVTool({
         ? typeof window !== "undefined" &&
           document.getElementById("hsv-slider-popout-anchor")
           ? ReactDOM.createPortal(
-              sliders,
+              <div className="hsv-slider-container">{sliders}</div>,
               document.getElementById("hsv-slider-popout-anchor") as HTMLElement
             )
           : null

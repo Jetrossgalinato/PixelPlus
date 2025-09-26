@@ -161,13 +161,13 @@ export default function EditPage() {
         <div
           id="hsv-slider-popout-anchor"
           className="absolute left-44 z-20"
-          style={{ top: "250px" }}
+          style={{ top: "250px", minWidth: "250px", minHeight: "150px" }}
         ></div>
         {/* RGB slider popout anchor - positioned outside sidebar */}
         <div
           id="rgb-slider-popout-anchor"
           className="absolute left-44 z-20"
-          style={{ top: "350px" }}
+          style={{ top: "350px", minWidth: "250px", minHeight: "150px" }}
         ></div>
         {/* Undo and Export buttons at top corners */}
         <div className="w-full flex justify-between items-start mb-2">

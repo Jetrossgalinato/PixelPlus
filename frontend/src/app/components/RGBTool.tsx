@@ -35,6 +35,32 @@ export default function RGBTool({
     if (imageDataUrl) applyRGB(1, 1, 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetSlidersSignal]);
+
+  // Handle click outside to close modal
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const anchorElement = document.getElementById("rgb-slider-popout-anchor");
+      const target = event.target as Node;
+
+      // Check if click was outside both the sliders and the anchor element
+      if (showSliders && popoutSliders && anchorElement) {
+        // Find the first child of the anchor (the slider container)
+        const sliderContainer = anchorElement.firstChild as Node;
+
+        // If the click wasn't on the sliders, close them
+        if (sliderContainer && !sliderContainer.contains(target)) {
+          setShowSliders(false);
+        }
+      }
+    }
+
+    if (showSliders && popoutSliders) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [showSliders, popoutSliders]);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastUrl = useRef<string | null>(null);
@@ -142,7 +168,7 @@ export default function RGBTool({
       {/* Render sliders outside sidebar using portal if popoutSliders is true */}
       {popoutSliders && showSliders
         ? ReactDOM.createPortal(
-            slidersUI,
+            <div className="rgb-slider-container">{slidersUI}</div>,
             document.getElementById("rgb-slider-popout-anchor") as HTMLElement
           )
         : showSliders && slidersUI}
