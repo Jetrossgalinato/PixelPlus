@@ -25,7 +25,6 @@ export default function DrawingTool({
   const [showSettings, setShowSettings] = useState(false);
   const canvasRef = useRef<fabric.Canvas | null>(null);
   const canvasWrapperRef = useRef<HTMLDivElement | null>(null);
-  const backgroundImageRef = useRef<fabric.Image | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
 
   const isDrawingRef = useRef(false);
@@ -33,59 +32,41 @@ export default function DrawingTool({
   const startPointRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const polygonPointsRef = useRef<{ x: number; y: number }[]>([]);
 
-  // Initialize canvas when component mounts or imageDataUrl changes
+  // Initialize canvas when toolbar is shown or image changes
   useEffect(() => {
-    if (imageDataUrl && !canvasRef.current && canvasWrapperRef.current) {
+    // Only create canvas when toolbar is shown or shape is active
+    if (imageDataUrl && showToolbar && canvasWrapperRef.current) {
+      // If canvas already exists, don't recreate it
+      if (canvasRef.current) return;
+
+      // Use viewport dimensions for full-screen overlay
+      const canvasWidth = window.innerWidth;
+      const canvasHeight = window.innerHeight;
+
+      // Create canvas with transparent background for overlay drawing
       const canvas = new fabric.Canvas("drawing-canvas", {
-        width: canvasWrapperRef.current.clientWidth,
-        height: canvasWrapperRef.current.clientHeight,
+        width: canvasWidth,
+        height: canvasHeight,
         selection: true,
         preserveObjectStacking: true,
+        backgroundColor: "transparent", // Make canvas background transparent
       });
 
       canvasRef.current = canvas;
 
-      // Load the current image as background
-      if (imageDataUrl) {
-        // @ts-expect-error - Type issues with fabric.js Image.fromURL
-        fabric.Image.fromURL(imageDataUrl, (img) => {
-          // Scale image to fit canvas
-          const canvasWidth = canvas.width || 800;
-          const canvasHeight = canvas.height || 600;
-
-          // Calculate scaling to fit image within canvas
-          const scale = Math.min(
-            canvasWidth / (img.width ?? 100),
-            canvasHeight / (img.height ?? 100)
-          );
-
-          img.scale(scale);
-
-          // Center the image
-          img.set({
-            left: (canvasWidth - (img.width ?? 100) * scale) / 2,
-            top: (canvasHeight - (img.height ?? 100) * scale) / 2,
-            selectable: false,
-            evented: false,
-          });
-
-          // Store background image reference
-          backgroundImageRef.current = img;
-
-          // Set as background
-          // @ts-expect-error - setBackgroundImage exists but TS doesn't recognize it
-          canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
-        });
-      }
+      // No need to load background image since we're overlaying on existing image
+      // The canvas will be transparent and drawing will appear on top
 
       // Setup window resize handler
       const handleResize = () => {
-        if (canvasWrapperRef.current && canvas) {
-          canvas.setDimensions({
-            width: canvasWrapperRef.current.clientWidth,
-            height: canvasWrapperRef.current.clientHeight,
+        if (canvasRef.current) {
+          const newWidth = window.innerWidth;
+          const newHeight = window.innerHeight;
+          canvasRef.current.setDimensions({
+            width: newWidth,
+            height: newHeight,
           });
-          canvas.renderAll();
+          canvasRef.current.renderAll();
         }
       };
 
@@ -96,9 +77,7 @@ export default function DrawingTool({
         canvasRef.current = null;
       };
     }
-  }, [imageDataUrl]);
-
-  // Set up mouse event handlers for drawing shapes
+  }, [imageDataUrl, showToolbar]); // Set up mouse event handlers for drawing shapes
   useEffect(() => {
     if (!canvasRef.current || !activeShape) return;
 
@@ -338,11 +317,7 @@ export default function DrawingTool({
     if (!canvasRef.current) return;
 
     const canvas = canvasRef.current;
-    canvas.getObjects().forEach((obj: fabric.Object) => {
-      if (obj !== backgroundImageRef.current) {
-        canvas.remove(obj);
-      }
-    });
+    canvas.clear(); // Clear all objects since we don't have a background to preserve
 
     canvas.renderAll();
   }, []);
@@ -353,33 +328,46 @@ export default function DrawingTool({
 
     const canvas = canvasRef.current;
 
-    // Make all objects non-selectable for export
-    canvas.discardActiveObject();
-    const prevSelectable = canvas
-      .getObjects()
-      .map((obj: fabric.Object) => obj.selectable);
-    canvas.getObjects().forEach((obj: fabric.Object) => {
-      obj.selectable = false;
-    });
-    canvas.renderAll();
+    // Check if there are any drawings on the canvas
+    if (canvas.getObjects().length === 0) {
+      // No drawings, just return the original image
+      onResult(imageDataUrl, imageDataUrl);
+      return imageDataUrl;
+    }
 
-    // Get canvas data URL
-    const dataUrl = canvas.toDataURL({
-      format: "png",
-      quality: 1,
-      multiplier: 1,
-    });
+    // Create a temporary canvas to combine original image with drawings
+    const tempCanvas = document.createElement("canvas");
+    const tempCtx = tempCanvas.getContext("2d");
+    if (!tempCtx) return;
 
-    // Restore selectability
-    canvas.getObjects().forEach((obj: fabric.Object, i: number) => {
-      if (prevSelectable[i] !== undefined) {
-        obj.selectable = prevSelectable[i];
-      }
-    });
-    canvas.renderAll();
+    // Create new image from original data
+    const originalImage = new Image();
+    originalImage.onload = () => {
+      // Set canvas size to match original image
+      tempCanvas.width = originalImage.width;
+      tempCanvas.height = originalImage.height;
 
-    onResult(dataUrl, imageDataUrl);
-    return dataUrl;
+      // Draw original image
+      tempCtx.drawImage(originalImage, 0, 0);
+
+      // Get the drawing canvas data
+      const drawingCanvas = canvas.getElement();
+
+      // Calculate scale to match original image dimensions
+      const scaleX = originalImage.width / drawingCanvas.width;
+      const scaleY = originalImage.height / drawingCanvas.height;
+
+      // Draw the canvas drawings scaled appropriately
+      tempCtx.scale(scaleX, scaleY);
+      tempCtx.drawImage(drawingCanvas, 0, 0);
+
+      // Get final composed image
+      const composedDataUrl = tempCanvas.toDataURL("png");
+
+      onResult(composedDataUrl, imageDataUrl);
+    };
+
+    originalImage.src = imageDataUrl;
   }, [imageDataUrl, onResult]);
 
   const saveAndClose = useCallback(() => {
@@ -661,22 +649,7 @@ export default function DrawingTool({
         </div>
       )}
 
-      {/* Text input (when text tool is active) */}
-      {activeShape === "text" && (
-        <div
-          className="absolute left-full ml-2 top-0 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700"
-          onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
-        >
-          <input
-            type="text"
-            value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
-            placeholder="Enter text..."
-            className="w-[150px] p-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
-            autoFocus
-          />
-        </div>
-      )}
+      {/* We don't need this text input here since we have one at the bottom */}
 
       {/* Help text for polygon */}
       {activeShape === "polygon" && (
@@ -695,9 +668,9 @@ export default function DrawingTool({
   );
 
   return (
-    <div className="relative">
+    <>
       {/* Drawing button with the toolbar */}
-      <div className="relative">
+      <div className="relative inline-block">
         <button
           className={`flex items-center gap-2 px-4 py-2 ${
             activeShape ? "bg-blue-600" : "bg-green-600"
@@ -714,20 +687,8 @@ export default function DrawingTool({
         {verticalToolbar}
       </div>
 
-      {/* Canvas container always present but only visible when needed */}
-      <div
-        className="w-full relative overflow-hidden"
-        ref={canvasWrapperRef}
-        style={{
-          minHeight: "300px",
-          display: canvasRef.current ? "block" : "none",
-        }}
-      >
-        <canvas id="drawing-canvas" className="absolute inset-0"></canvas>
-      </div>
-
-      {/* Text input for when it's needed outside the toolbar */}
-      {activeShape === "text" && showSettings && (
+      {/* Text input fixed at the bottom of the screen */}
+      {activeShape === "text" && (
         <div
           className="fixed bottom-4 left-4 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700 z-50"
           onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
@@ -745,6 +706,21 @@ export default function DrawingTool({
           />
         </div>
       )}
-    </div>
+
+      {/* Canvas for drawing - positioned as needed */}
+      {showToolbar && (
+        <div
+          id="drawing-canvas-container"
+          ref={canvasWrapperRef}
+          className="fixed inset-0 pointer-events-none z-30"
+        >
+          <canvas
+            id="drawing-canvas"
+            className="absolute inset-0"
+            style={{ pointerEvents: activeShape ? "auto" : "none" }}
+          ></canvas>
+        </div>
+      )}
+    </>
   );
 }
