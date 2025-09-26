@@ -63,6 +63,7 @@ export default function EditPage() {
   // Export handlers
   const handleExport = (type: "png" | "jpg" | "pdf") => {
     if (!result) return;
+    alert("Download started!");
     if (type === "pdf") {
       // Export both images to PDF
       import("jspdf").then((jsPDFModule) => {
