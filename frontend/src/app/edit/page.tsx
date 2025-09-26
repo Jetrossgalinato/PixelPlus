@@ -18,7 +18,8 @@ export default function EditPage() {
   const [processing] = useState(false); // retained for future multi-tool orchestration
   const [result, setResult] = useState<string | null>(null);
   const prevResultUrl = useRef<string | null>(null);
-  const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [undoStack, setUndoStack] = useState<string[]>([]); // For resetting to original
+  const [editHistory, setEditHistory] = useState<string[]>([]); // For step-by-step undo
 
   // Restore edit preview from localStorage on mount
   useEffect(() => {
@@ -38,14 +39,20 @@ export default function EditPage() {
   // Receive grayscale or RGB result from tool component
   const handleEditResult = useCallback(
     (url: string, originalForUndo?: string) => {
-      if (!result && originalForUndo) setUndoStack([originalForUndo]);
+      // Save current result to history before applying new edit
+      if (result) {
+        setEditHistory((prev) => [...prev, result]);
+      } else if (originalForUndo) {
+        // If this is the first edit, save original
+        setUndoStack([originalForUndo]);
+      }
       setResult(url);
     },
     [result]
   );
 
   // Back to default (original) handler
-  const handleBackToDefault = () => {
+  const handleBackToDefault = useCallback(() => {
     setRgbResetSignal((s) => s + 1); // trigger RGBTool slider reset
     if (undoStack.length > 0) {
       setResult(undoStack[0]);
@@ -53,7 +60,33 @@ export default function EditPage() {
     } else if (image.dataUrl) {
       setResult(null); // will show original placeholder
     }
-  };
+    // Clear edit history when returning to default
+    setEditHistory([]);
+  }, [undoStack, image.dataUrl]);
+
+  // Undo last edit - goes back one step in edit history
+  const undoLastEdit = useCallback(() => {
+    if (editHistory.length > 0) {
+      // Get the previous state from history
+      const newHistory = [...editHistory];
+      const previousState = newHistory.pop();
+
+      // Update the edit history and result
+      setEditHistory(newHistory);
+      if (previousState) {
+        setResult(previousState);
+      } else if (undoStack.length > 0) {
+        // If no more history, go back to original
+        setResult(undoStack[0]);
+      } else {
+        // If no original in undoStack, go to null (shows original image)
+        setResult(null);
+      }
+    } else if (result) {
+      // If no edit history but we have a result, go back to original
+      handleBackToDefault();
+    }
+  }, [editHistory, result, undoStack, handleBackToDefault]);
 
   // Cleanup object URL on unmount
   useEffect(() => {
@@ -182,7 +215,10 @@ export default function EditPage() {
         ></div>
         {/* Undo and Export buttons at top corners */}
         <div className="w-full flex justify-between items-start mb-2">
-          <UndoButton onClick={handleBackToDefault} disabled={!result} />
+          <UndoButton
+            onClick={undoLastEdit}
+            disabled={!result && editHistory.length === 0}
+          />
           <ExportButton
             disabled={!result}
             imageDataUrl={image.dataUrl}

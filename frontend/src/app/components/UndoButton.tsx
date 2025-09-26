@@ -1,6 +1,6 @@
 "use client";
-import { RotateCcw } from "lucide-react";
 import React, { useEffect } from "react";
+import { RotateCcw } from "lucide-react";
 
 type UndoButtonProps = {
   onClick: () => void;
@@ -26,7 +26,7 @@ export default function UndoButton({ onClick, disabled }: UndoButtonProps) {
       onClick={onClick}
       disabled={disabled}
       style={{ minWidth: 60 }}
-      title="Undo all edits"
+      title="Undo last edit (Ctrl+Z)"
     >
       <RotateCcw className="w-4 h-4" /> Undo
     </button>
