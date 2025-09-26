@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import ReactDOM from "react-dom";
 import { SlidersHorizontal } from "lucide-react";
 
 type RGBToolProps = {
@@ -9,15 +10,17 @@ type RGBToolProps = {
   className?: string;
   resetSlidersSignal?: number; // increment to trigger reset
   layout?: "vertical" | "horizontal";
+  popoutSliders?: boolean;
 };
 
 export default function RGBTool({
   imageDataUrl,
   onResult,
   disabled,
-  className = "",
+  // className = "",
   resetSlidersSignal,
-  layout = "vertical",
+  // layout = "vertical",
+  popoutSliders = false,
 }: RGBToolProps) {
   const [showSliders, setShowSliders] = useState(false);
   const [r, setR] = useState(1);
@@ -77,128 +80,73 @@ export default function RGBTool({
     applyRGB(newR, newG, newB);
   }
 
-  return (
+  // Sliders UI component
+  const slidersUI = (
     <div
-      className={className}
-      style={
-        layout === "horizontal" ? { display: "flex", alignItems: "center" } : {}
-      }
+      id="rgb-sliders"
+      className="flex flex-col gap-2 bg-white dark:bg-gray-900 p-4 rounded shadow max-w-xs border border-gray-200 dark:border-gray-700"
+      style={{ minWidth: 200 }}
     >
+      <label className="flex flex-col text-xs text-gray-700 dark:text-gray-200">
+        Red:
+        <input
+          type="range"
+          min={0}
+          max={2}
+          step={0.01}
+          value={r}
+          onChange={(e) => handleSliderChange(Number(e.target.value), g, b)}
+        />
+        <span className="text-xs">{r.toFixed(2)}</span>
+      </label>
+      <label className="flex flex-col text-xs text-gray-700 dark:text-gray-200">
+        Green:
+        <input
+          type="range"
+          min={0}
+          max={2}
+          step={0.01}
+          value={g}
+          onChange={(e) => handleSliderChange(r, Number(e.target.value), b)}
+        />
+        <span className="text-xs">{g.toFixed(2)}</span>
+      </label>
+      <label className="flex flex-col text-xs text-gray-700 dark:text-gray-200">
+        Blue:
+        <input
+          type="range"
+          min={0}
+          max={2}
+          step={0.01}
+          value={b}
+          onChange={(e) => handleSliderChange(r, g, Number(e.target.value))}
+        />
+        <span className="text-xs">{b.toFixed(2)}</span>
+      </label>
+    </div>
+  );
+
+  return (
+    <>
       <button
         className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg shadow hover:bg-purple-700 transition disabled:opacity-50"
         onClick={() => setShowSliders((v) => !v)}
         disabled={disabled || !imageDataUrl}
         aria-expanded={showSliders}
         aria-controls="rgb-sliders"
-        style={{ marginBottom: layout === "vertical" && showSliders ? 0 : 0 }}
+        style={{ marginBottom: 0 }}
       >
         <SlidersHorizontal className="w-4 h-4" /> RGB
       </button>
-      {/* Sliders: right of button if horizontal, below if vertical */}
-      {layout === "horizontal" ? (
-        showSliders && (
-          <div
-            id="rgb-sliders"
-            className="ml-4 flex flex-col gap-2 bg-white dark:bg-gray-900 p-4 rounded shadow max-w-xs"
-            style={{ minWidth: 180 }}
-          >
-            <label className="flex flex-col text-xs text-gray-700 dark:text-gray-200">
-              Red:{" "}
-              <input
-                type="range"
-                min={0}
-                max={2}
-                step={0.01}
-                value={r}
-                onChange={(e) =>
-                  handleSliderChange(Number(e.target.value), g, b)
-                }
-              />
-              <span className="text-xs">{r.toFixed(2)}</span>
-            </label>
-            <label className="flex flex-col text-xs text-gray-700 dark:text-gray-200">
-              Green:{" "}
-              <input
-                type="range"
-                min={0}
-                max={2}
-                step={0.01}
-                value={g}
-                onChange={(e) =>
-                  handleSliderChange(r, Number(e.target.value), b)
-                }
-              />
-              <span className="text-xs">{g.toFixed(2)}</span>
-            </label>
-            <label className="flex flex-col text-xs text-gray-700 dark:text-gray-200">
-              Blue:{" "}
-              <input
-                type="range"
-                min={0}
-                max={2}
-                step={0.01}
-                value={b}
-                onChange={(e) =>
-                  handleSliderChange(r, g, Number(e.target.value))
-                }
-              />
-              <span className="text-xs">{b.toFixed(2)}</span>
-            </label>
-          </div>
-        )
-      ) : (
-        <div style={{ minHeight: 120, transition: "min-height 0.2s" }}>
-          {showSliders && (
-            <div
-              id="rgb-sliders"
-              className="mt-3 flex flex-col gap-2 bg-white dark:bg-gray-900 p-4 rounded shadow max-w-xs"
-            >
-              <label className="flex flex-col text-xs text-gray-700 dark:text-gray-200">
-                Red:{" "}
-                <input
-                  type="range"
-                  min={0}
-                  max={2}
-                  step={0.01}
-                  value={r}
-                  onChange={(e) =>
-                    handleSliderChange(Number(e.target.value), g, b)
-                  }
-                />
-                <span className="text-xs">{r.toFixed(2)}</span>
-              </label>
-              <label className="flex flex-col text-xs text-gray-700 dark:text-gray-200">
-                Green:{" "}
-                <input
-                  type="range"
-                  min={0}
-                  max={2}
-                  step={0.01}
-                  value={g}
-                  onChange={(e) =>
-                    handleSliderChange(r, Number(e.target.value), b)
-                  }
-                />
-                <span className="text-xs">{g.toFixed(2)}</span>
-              </label>
-              <label className="flex flex-col text-xs text-gray-700 dark:text-gray-200">
-                Blue:{" "}
-                <input
-                  type="range"
-                  min={0}
-                  max={2}
-                  step={0.01}
-                  value={b}
-                  onChange={(e) =>
-                    handleSliderChange(r, g, Number(e.target.value))
-                  }
-                />
-                <span className="text-xs">{b.toFixed(2)}</span>
-              </label>
-            </div>
-          )}
-        </div>
-      )}
+
+      {/* Render sliders outside sidebar using portal if popoutSliders is true */}
+      {popoutSliders && showSliders
+        ? ReactDOM.createPortal(
+            slidersUI,
+            document.getElementById("rgb-slider-popout-anchor") as HTMLElement
+          )
+        : showSliders && slidersUI}
+
       {processing && (
         <div className="mt-1 text-xs text-gray-500 flex items-center gap-1">
           Processing...
@@ -209,6 +157,6 @@ export default function RGBTool({
           {error}
         </div>
       )}
-    </div>
+    </>
   );
 }
