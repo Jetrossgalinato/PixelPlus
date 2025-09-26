@@ -9,6 +9,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import GrayscaleTool from "../components/GrayscaleTool";
 import RGBTool from "../components/RGBTool";
 import HSVTool from "../components/HSVTool";
+import DrawingTool from "../components/DrawingTool";
 import { useImage } from "../ImageContext";
 
 export default function EditPage() {
@@ -147,6 +148,16 @@ export default function EditPage() {
               resetSlidersSignal={rgbResetSignal}
               layout="horizontal"
               popoutSliders={true}
+            />
+          </div>
+          {/* Divider */}
+          <div className="w-10 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          {/* Drawing Tool Button */}
+          <div className="w-full flex flex-col items-start">
+            <DrawingTool
+              imageDataUrl={result || image.dataUrl}
+              onResult={handleEditResult}
+              disabled={processing || !(result || image.dataUrl)}
             />
           </div>
           {/* Divider */}
