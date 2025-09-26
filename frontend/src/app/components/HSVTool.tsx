@@ -8,7 +8,10 @@ type HSVToolProps = {
   onResult: (url: string, originalForUndo?: string) => void;
   disabled?: boolean;
   className?: string;
-  resetSlidersSignal?: number;
+  resetSlidersSignal?: {
+    counter: number;
+    values: { h: number; s: number; v: number };
+  };
   layout?: "vertical" | "horizontal";
   popoutSliders?: boolean;
 };
@@ -25,14 +28,16 @@ export default function HSVTool({
   const [s, setS] = useState(1);
   const [v, setV] = useState(1);
 
-  // Reset sliders to default when resetSlidersSignal changes
+  // Reset sliders to specific values when resetSlidersSignal changes (do NOT auto-apply HSV)
   useEffect(() => {
-    setH(0);
-    setS(1);
-    setV(1);
-    if (imageDataUrl) applyHSV(0, 1, 1);
+    if (!resetSlidersSignal) return;
+    const { h: newH, s: newS, v: newV } = resetSlidersSignal.values;
+    setH(newH);
+    setS(newS);
+    setV(newV);
+    // Do NOT call applyHSV here; parent is responsible for image state
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetSlidersSignal]);
+  }, [resetSlidersSignal?.counter]);
 
   // Handle click outside to close modal
   useEffect(() => {

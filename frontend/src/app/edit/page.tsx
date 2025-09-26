@@ -18,8 +18,18 @@ export default function EditPage() {
   const [processing] = useState(false); // retained for future multi-tool orchestration
   const [result, setResult] = useState<string | null>(null);
   const prevResultUrl = useRef<string | null>(null);
-  const [undoStack, setUndoStack] = useState<string[]>([]); // For resetting to original
-  const [editHistory, setEditHistory] = useState<string[]>([]); // For step-by-step undo
+  // Track both image and HSV slider state
+  const [undoStack, setUndoStack] = useState<
+    { url: string; hsv: { h: number; s: number; v: number } }[]
+  >([]); // For resetting to original
+  const [editHistory, setEditHistory] = useState<
+    { url: string; hsv: { h: number; s: number; v: number } }[]
+  >([]); // For step-by-step undo
+  const [hsvSlider, setHsvSlider] = useState<{
+    h: number;
+    s: number;
+    v: number;
+  }>({ h: 0, s: 1, v: 1 });
 
   // Restore edit preview from localStorage on mount
   useEffect(() => {
@@ -27,40 +37,53 @@ export default function EditPage() {
     if (saved) {
       setResult(saved);
     }
-    // Always start with empty undo stack on mount (or new image)
     setUndoStack([]);
+    setHsvSlider({ h: 0, s: 1, v: 1 });
   }, [image.dataUrl, image.fileName]);
   // Removed unused showComparison for performance cleanliness
   const [error] = useState<string | null>(null);
 
   // For resetting RGB sliders on Undo
   const [rgbResetSignal, setRgbResetSignal] = useState(0);
+  const [hsvResetSignal, setHsvResetSignal] = useState(0);
 
-  // Receive grayscale or RGB result from tool component
+  // Receive grayscale or RGB/HSV result from tool component
   const handleEditResult = useCallback(
-    (url: string, originalForUndo?: string) => {
-      // Save current result to history before applying new edit
+    (
+      url: string,
+      originalForUndo?: string,
+      sliderValues?: {
+        type: "hsv";
+        values: { h: number; s: number; v: number };
+      }
+    ) => {
+      // Save current result and slider state to history before applying new edit
       if (result) {
-        setEditHistory((prev) => [...prev, result]);
+        setEditHistory((prev) => [...prev, { url: result, hsv: hsvSlider }]);
       } else if (originalForUndo) {
         // If this is the first edit, save original
-        setUndoStack([originalForUndo]);
+        setUndoStack([{ url: originalForUndo, hsv: { h: 0, s: 1, v: 1 } }]);
+      }
+      if (sliderValues && sliderValues.type === "hsv") {
+        setHsvSlider(sliderValues.values);
       }
       setResult(url);
     },
-    [result]
+    [result, hsvSlider]
   );
 
   // Back to default (original) handler
   const handleBackToDefault = useCallback(() => {
     setRgbResetSignal((s) => s + 1); // trigger RGBTool slider reset
+    setHsvResetSignal((s) => s + 1); // trigger HSVTool slider reset
     if (undoStack.length > 0) {
-      setResult(undoStack[0]);
+      setResult(undoStack[0].url);
+      setHsvSlider(undoStack[0].hsv);
       setUndoStack([]);
     } else if (image.dataUrl) {
       setResult(null); // will show original placeholder
+      setHsvSlider({ h: 0, s: 1, v: 1 });
     }
-    // Clear edit history when returning to default
     setEditHistory([]);
   }, [undoStack, image.dataUrl]);
 
@@ -71,19 +94,21 @@ export default function EditPage() {
       const newHistory = [...editHistory];
       const previousState = newHistory.pop();
 
-      // Update the edit history and result
       setEditHistory(newHistory);
       if (previousState) {
-        setResult(previousState);
+        setResult(previousState.url);
+        setHsvSlider(previousState.hsv);
+        setHsvResetSignal((s) => s + 1); // trigger HSVTool slider reset
       } else if (undoStack.length > 0) {
-        // If no more history, go back to original
-        setResult(undoStack[0]);
+        setResult(undoStack[0].url);
+        setHsvSlider(undoStack[0].hsv);
+        setHsvResetSignal((s) => s + 1);
       } else {
-        // If no original in undoStack, go to null (shows original image)
         setResult(null);
+        setHsvSlider({ h: 0, s: 1, v: 1 });
+        setHsvResetSignal((s) => s + 1);
       }
     } else if (result) {
-      // If no edit history but we have a result, go back to original
       handleBackToDefault();
     }
   }, [editHistory, result, undoStack, handleBackToDefault]);
@@ -165,7 +190,10 @@ export default function EditPage() {
               imageDataUrl={result || image.dataUrl}
               onResult={handleEditResult}
               disabled={processing || !(result || image.dataUrl)}
-              resetSlidersSignal={rgbResetSignal}
+              resetSlidersSignal={{
+                counter: hsvResetSignal,
+                values: hsvSlider,
+              }}
               layout="horizontal"
               popoutSliders={true}
             />
