@@ -1,7 +1,8 @@
 "use client";
 import Image from "next/image";
 
-import { Loader2, ArrowLeft, RotateCcw } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
+import UndoButton from "../components/UndoButton";
 import ExportButton from "../components/ExportButton";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -150,15 +151,7 @@ export default function EditPage() {
         ></div>
         {/* Undo and Export buttons at top corners */}
         <div className="w-full flex justify-between items-start mb-2">
-          <button
-            className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50"
-            onClick={handleBackToDefault}
-            disabled={!result}
-            style={{ minWidth: 60 }}
-            title="Undo all edits"
-          >
-            <RotateCcw className="w-4 h-4" /> Undo
-          </button>
+          <UndoButton onClick={handleBackToDefault} disabled={!result} />
           <ExportButton
             disabled={!result}
             imageDataUrl={image.dataUrl}
