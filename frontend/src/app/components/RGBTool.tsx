@@ -17,12 +17,21 @@ export default function RGBTool({
   imageDataUrl,
   onResult,
   disabled,
-  // className = "",
   resetSlidersSignal,
-  // layout = "vertical",
   popoutSliders = false,
-}: RGBToolProps) {
-  const [showSliders, setShowSliders] = useState(false);
+  showSliders: showSlidersProp,
+  setShowSliders: setShowSlidersProp,
+}: RGBToolProps & {
+  showSliders?: boolean;
+  setShowSliders?: (show: boolean) => void;
+}) {
+  const [internalShowSliders, internalSetShowSliders] = useState(false);
+  const showSliders =
+    showSlidersProp !== undefined ? showSlidersProp : internalShowSliders;
+  const setShowSliders =
+    setShowSlidersProp !== undefined
+      ? setShowSlidersProp
+      : internalSetShowSliders;
   const [r, setR] = useState(1);
   const [g, setG] = useState(1);
   const [b, setB] = useState(1);
@@ -60,7 +69,7 @@ export default function RGBTool({
         document.removeEventListener("mousedown", handleClickOutside);
       };
     }
-  }, [showSliders, popoutSliders]);
+  }, [showSliders, popoutSliders, setShowSliders]);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastUrl = useRef<string | null>(null);
@@ -156,7 +165,7 @@ export default function RGBTool({
     <>
       <button
         className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white cursor-pointer rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50"
-        onClick={() => setShowSliders((v) => !v)}
+        onClick={() => setShowSliders(!showSliders)}
         disabled={disabled || !imageDataUrl}
         aria-expanded={showSliders}
         aria-controls="rgb-sliders"

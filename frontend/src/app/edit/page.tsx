@@ -16,6 +16,8 @@ export default function EditPage() {
   const router = useRouter();
   const { image } = useImage();
   const [processing] = useState(false); // retained for future multi-tool orchestration
+  // Track which slider modal is open: "hsv", "rgb", or null
+  const [openSlider, setOpenSlider] = useState<null | "hsv" | "rgb">(null);
   const [result, setResult] = useState<string | null>(null);
   const prevResultUrl = useRef<string | null>(null);
   // Track both image and HSV slider state
@@ -196,6 +198,10 @@ export default function EditPage() {
               }}
               layout="horizontal"
               popoutSliders={true}
+              showSliders={openSlider === "hsv"}
+              setShowSliders={(show: boolean) =>
+                setOpenSlider(show ? "hsv" : null)
+              }
             />
           </div>
           {/* Divider */}
@@ -209,6 +215,10 @@ export default function EditPage() {
               resetSlidersSignal={rgbResetSignal}
               layout="horizontal"
               popoutSliders={true}
+              showSliders={openSlider === "rgb"}
+              setShowSliders={(show: boolean) =>
+                setOpenSlider(show ? "rgb" : null)
+              }
             />
           </div>
           {/* Divider */}
@@ -230,17 +240,27 @@ export default function EditPage() {
       {/* Main content area shifted right */}
       <main className="flex-1 flex flex-col items-center px-8 py-8">
         {/* HSV slider popout anchor - positioned outside sidebar */}
-        <div
-          id="hsv-slider-popout-anchor"
-          className="absolute left-44 z-20"
-          style={{ top: "250px", minWidth: "250px", minHeight: "150px" }}
-        ></div>
+        {/* HSV slider popout anchor - positioned outside sidebar */}
+        {openSlider !== "rgb" && (
+          <div
+            id="hsv-slider-popout-anchor"
+            className="absolute left-44 z-20"
+            style={{ top: "250px", minWidth: "250px", minHeight: "150px" }}
+          ></div>
+        )}
         {/* RGB slider popout anchor - positioned outside sidebar */}
-        <div
-          id="rgb-slider-popout-anchor"
-          className="absolute left-44 z-20"
-          style={{ top: "350px", minWidth: "250px", minHeight: "150px" }}
-        ></div>
+        {openSlider !== "hsv" && (
+          <div
+            id="rgb-slider-popout-anchor"
+            className="absolute left-44 z-10"
+            style={{
+              top: "350px",
+              minWidth: "250px",
+              minHeight: "150px",
+              zIndex: 10,
+            }}
+          ></div>
+        )}
         {/* Undo and Export buttons at top corners */}
         <div className="w-full flex justify-between items-start mb-2">
           <UndoButton

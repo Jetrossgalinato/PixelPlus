@@ -22,8 +22,19 @@ export default function HSVTool({
   disabled,
   resetSlidersSignal,
   popoutSliders = false,
-}: HSVToolProps) {
-  const [showSliders, setShowSliders] = useState(false);
+  showSliders: showSlidersProp,
+  setShowSliders: setShowSlidersProp,
+}: HSVToolProps & {
+  showSliders?: boolean;
+  setShowSliders?: (show: boolean) => void;
+}) {
+  const [internalShowSliders, internalSetShowSliders] = useState(false);
+  const showSliders =
+    showSlidersProp !== undefined ? showSlidersProp : internalShowSliders;
+  const setShowSliders =
+    setShowSlidersProp !== undefined
+      ? setShowSlidersProp
+      : internalSetShowSliders;
   const [h, setH] = useState(0);
   const [s, setS] = useState(1);
   const [v, setV] = useState(1);
@@ -63,7 +74,7 @@ export default function HSVTool({
         document.removeEventListener("mousedown", handleClickOutside);
       };
     }
-  }, [showSliders, popoutSliders]);
+  }, [showSliders, popoutSliders, setShowSliders]);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastUrl = useRef<string | null>(null);
@@ -156,7 +167,7 @@ export default function HSVTool({
     <>
       <button
         className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white cursor-pointer rounded-lg shadow hover:bg-gray-700 transition disabled:opacity-50"
-        onClick={() => setShowSliders((v) => !v)}
+        onClick={() => setShowSliders(!showSliders)}
         disabled={disabled || !imageDataUrl}
         aria-expanded={showSliders}
         aria-controls="hsv-sliders"
