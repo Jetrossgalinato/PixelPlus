@@ -152,7 +152,7 @@ export default function DrawingTool({
             top: pointer.y,
             width: 0,
             height: 0,
-            fill: "transparent",
+            fill: fabric.Color.fromHex(fillColor).setAlpha(0.3).toRgba(), // Semi-transparent fill preview
             stroke: strokeColor,
             strokeWidth,
             selectable: false,
@@ -163,7 +163,7 @@ export default function DrawingTool({
             left: pointer.x,
             top: pointer.y,
             radius: 0,
-            fill: "transparent",
+            fill: fabric.Color.fromHex(fillColor).setAlpha(0.3).toRgba(), // Semi-transparent fill preview
             stroke: strokeColor,
             strokeWidth,
             selectable: false,
@@ -177,7 +177,7 @@ export default function DrawingTool({
             shapeRef.current = new fabric.Polygon(
               [{ x: pointer.x, y: pointer.y }],
               {
-                fill: "transparent",
+                fill: fabric.Color.fromHex(fillColor).setAlpha(0.3).toRgba(), // Semi-transparent fill preview
                 stroke: strokeColor,
                 strokeWidth,
                 selectable: false,
@@ -321,7 +321,7 @@ export default function DrawingTool({
       const text = new fabric.Textbox(textInput, {
         left: pointer.x,
         top: pointer.y,
-        fill: strokeColor,
+        fill: fillColor, // Use fillColor for text color instead of strokeColor
         fontSize: 20,
         fontFamily: "Arial",
         editable: true,
@@ -338,7 +338,7 @@ export default function DrawingTool({
         canvas.off("mouse:down", addTextHandler);
       };
     }
-  }, [activeShape, textInput, strokeColor, isPointInImage]);
+  }, [activeShape, textInput, strokeColor, fillColor, isPointInImage]);
 
   // Handle move mode
   useEffect(() => {
@@ -590,7 +590,7 @@ export default function DrawingTool({
       <button
         onClick={() => setShowColorPicker((prev) => !prev)}
         className="p-2 rounded-md bg-gray-700 text-gray-200 hover:bg-gray-600 relative"
-        title="Color Settings"
+        title="Color Settings (Stroke & Fill)"
       >
         <div className="flex flex-col items-center">
           <div
@@ -656,19 +656,29 @@ export default function DrawingTool({
           className="absolute left-full ml-2 bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-700"
           onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
         >
-          <div className="flex flex-col gap-3 min-w-[150px]">
+          <div className="flex flex-col gap-3 min-w-[180px]">
+            <p className="text-xs text-gray-400 mb-1">
+              Select colors for your shapes:
+            </p>
+
             <div>
-              <label className="text-sm text-gray-300 block mb-1">Fill:</label>
+              <label className="text-sm text-gray-300 block mb-1">
+                Fill Color: <span className="text-xs">(Shapes & Text)</span>
+              </label>
               <input
                 type="color"
                 value={fillColor}
                 onChange={(e) => setFillColor(e.target.value)}
                 className="w-full h-8 border-none rounded cursor-pointer"
               />
+              <div className="text-xs text-gray-400 mt-1">
+                Used for shape interiors and text color
+              </div>
             </div>
+
             <div>
               <label className="text-sm text-gray-300 block mb-1">
-                Stroke:
+                Stroke Color: <span className="text-xs">(Outlines)</span>
               </label>
               <input
                 type="color"
@@ -676,6 +686,9 @@ export default function DrawingTool({
                 onChange={(e) => setStrokeColor(e.target.value)}
                 className="w-full h-8 border-none rounded cursor-pointer"
               />
+              <div className="text-xs text-gray-400 mt-1">
+                Used for shape outlines and lines
+              </div>
             </div>
           </div>
         </div>
