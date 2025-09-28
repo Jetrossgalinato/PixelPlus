@@ -462,9 +462,6 @@ export default function EditPage() {
         </h1>
         {/* Single large edit preview */}
         <div className="flex flex-col items-center w-full max-w-4xl mt-4">
-          <h2 className="mb-2 text-lg font-semibold text-gray-700 dark:text-gray-200">
-            Edit Preview
-          </h2>
           {result ? (
             <Image
               src={result}
