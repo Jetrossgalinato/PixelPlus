@@ -386,6 +386,13 @@ export default function DrawingTool({
       return imageDataUrl;
     }
 
+    // Get the image preview element boundaries to ensure proper positioning
+    const imageBoundaries = getImageBoundaries();
+    if (!imageBoundaries) {
+      console.error("Could not get image boundaries");
+      return;
+    }
+
     // Create a temporary canvas to combine original image with drawings
     const tempCanvas = document.createElement("canvas");
     const tempCtx = tempCanvas.getContext("2d");
@@ -401,25 +408,151 @@ export default function DrawingTool({
       // Draw original image
       tempCtx.drawImage(originalImage, 0, 0);
 
-      // Get the drawing canvas data
-      const drawingCanvas = canvas.getElement();
+      // Instead of cloning objects individually, let's use a more direct approach
+      // We'll create a JSON representation of the canvas and calculate the correct scaling
 
-      // Calculate scale to match original image dimensions
-      const scaleX = originalImage.width / drawingCanvas.width;
-      const scaleY = originalImage.height / drawingCanvas.height;
+      // Calculate overall scale ratio between display size and actual image size
+      const scaleRatioX = originalImage.width / imageBoundaries.width;
+      const scaleRatioY = originalImage.height / imageBoundaries.height;
 
-      // Draw the canvas drawings scaled appropriately
-      tempCtx.scale(scaleX, scaleY);
-      tempCtx.drawImage(drawingCanvas, 0, 0);
+      // Get the viewport scroll position
+      const viewportLeft = window.scrollX;
+      const viewportTop = window.scrollY;
+
+      // Adjust the canvas dimensions to match the original image
+      const exportCanvas = new fabric.Canvas(document.createElement("canvas"), {
+        width: tempCanvas.width,
+        height: tempCanvas.height,
+      });
+
+      // Copy each object from the drawing canvas to the export canvas with proper positioning
+      canvas.getObjects().forEach((obj) => {
+        // Create a clean copy through serialization (not needed directly in this approach)
+        // We're using direct property access instead
+
+        // Calculate relative position within the displayed image
+        const relX =
+          ((obj.left as number) - (imageBoundaries.left - viewportLeft)) /
+          imageBoundaries.width;
+        const relY =
+          ((obj.top as number) - (imageBoundaries.top - viewportTop)) /
+          imageBoundaries.height;
+
+        // Calculate absolute position on the target image
+        const targetX = relX * originalImage.width;
+        const targetY = relY * originalImage.height;
+
+        // Create a new object of the same type
+        let newObj: fabric.Object | null = null;
+
+        // Handle different object types
+        if (obj instanceof fabric.Line) {
+          // For lines, we need to scale the endpoints
+          const x1 =
+            (((obj.x1 || 0) - (imageBoundaries.left - viewportLeft)) /
+              imageBoundaries.width) *
+            originalImage.width;
+          const y1 =
+            (((obj.y1 || 0) - (imageBoundaries.top - viewportTop)) /
+              imageBoundaries.height) *
+            originalImage.height;
+          const x2 =
+            (((obj.x2 || 0) - (imageBoundaries.left - viewportLeft)) /
+              imageBoundaries.width) *
+            originalImage.width;
+          const y2 =
+            (((obj.y2 || 0) - (imageBoundaries.top - viewportTop)) /
+              imageBoundaries.height) *
+            originalImage.height;
+
+          newObj = new fabric.Line([x1, y1, x2, y2], {
+            stroke: obj.stroke,
+            strokeWidth: (obj.strokeWidth || 1) * scaleRatioX, // Scale stroke width
+            fill: obj.fill,
+          });
+        } else if (obj instanceof fabric.Circle) {
+          // For circles, scale the radius
+          const radius = (obj.radius || 0) * scaleRatioX;
+
+          newObj = new fabric.Circle({
+            radius,
+            left: targetX - radius, // Adjust position to account for radius
+            top: targetY - radius,
+            fill: obj.fill,
+            stroke: obj.stroke,
+            strokeWidth: (obj.strokeWidth || 1) * scaleRatioX,
+          });
+        } else if (obj instanceof fabric.Rect) {
+          // For rectangles, scale width and height
+          const width = (obj.width || 0) * scaleRatioX;
+          const height = (obj.height || 0) * scaleRatioY;
+
+          newObj = new fabric.Rect({
+            left: targetX,
+            top: targetY,
+            width: width,
+            height: height,
+            fill: obj.fill,
+            stroke: obj.stroke,
+            strokeWidth: (obj.strokeWidth || 1) * scaleRatioX,
+          });
+        } else if (obj instanceof fabric.Polygon) {
+          // For polygons, scale all points
+          const scaledPoints = (obj.points || []).map((point) => ({
+            x:
+              ((point.x - (imageBoundaries.left - viewportLeft)) /
+                imageBoundaries.width) *
+              originalImage.width,
+            y:
+              ((point.y - (imageBoundaries.top - viewportTop)) /
+                imageBoundaries.height) *
+              originalImage.height,
+          }));
+
+          newObj = new fabric.Polygon(scaledPoints, {
+            fill: obj.fill,
+            stroke: obj.stroke,
+            strokeWidth: (obj.strokeWidth || 1) * scaleRatioX,
+          });
+        } else if (obj instanceof fabric.Textbox) {
+          // For text, scale font size and position
+          newObj = new fabric.Textbox(obj.text || "", {
+            left: targetX,
+            top: targetY,
+            fontSize: (obj.fontSize || 20) * scaleRatioX,
+            fill: obj.fill,
+            fontFamily: obj.fontFamily,
+          });
+        }
+
+        // Add the new object to the export canvas
+        if (newObj) {
+          exportCanvas.add(newObj);
+        }
+      });
+
+      // Render all objects in the export canvas
+      exportCanvas.renderAll();
+
+      // Draw the export canvas on top of the original image
+      tempCtx.drawImage(exportCanvas.getElement(), 0, 0);
 
       // Get final composed image
-      const composedDataUrl = tempCanvas.toDataURL("png");
+      const composedDataUrl = tempCanvas.toDataURL("image/png", 1.0);
 
+      // Clean up resources
+      try {
+        exportCanvas.dispose();
+      } catch (e) {
+        console.error("Error disposing export canvas:", e);
+      }
+
+      console.log("Drawing saved with proper positioning and scaling");
       onResult(composedDataUrl, imageDataUrl);
     };
 
     originalImage.src = imageDataUrl;
-  }, [imageDataUrl, onResult]);
+  }, [imageDataUrl, onResult, getImageBoundaries]);
 
   const saveAndClose = useCallback(() => {
     saveCanvasImage();
