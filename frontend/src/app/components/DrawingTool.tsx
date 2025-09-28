@@ -167,6 +167,8 @@ export default function DrawingTool({
             stroke: strokeColor,
             strokeWidth,
             selectable: false,
+            originX: "center",
+            originY: "center", // Set origin to center for consistent positioning
           });
           break;
         case "polygon":
@@ -233,10 +235,12 @@ export default function DrawingTool({
           });
           break;
         case "circle":
+          // Calculate radius from center (startPoint) to current mouse position
           const radius = Math.sqrt(
             Math.pow(pointer.x - startPointRef.current.x, 2) +
               Math.pow(pointer.y - startPointRef.current.y, 2)
           );
+          // Since we're using center origin, we only need to update the radius
           (shapeRef.current as fabric.Circle).set({
             radius,
           });
@@ -471,16 +475,32 @@ export default function DrawingTool({
             fill: obj.fill,
           });
         } else if (obj instanceof fabric.Circle) {
-          // For circles, scale the radius
+          // For circles with center-based origin (our updated approach)
           const radius = (obj.radius || 0) * scaleRatioX;
 
+          // Since we now set originX/Y to 'center' when creating the circle,
+          // obj.left and obj.top already represent the center point
+
+          // Convert this center point from screen to image coordinates
+          const imageCenterX =
+            (((obj.left || 0) - (imageBoundaries.left - viewportLeft)) /
+              imageBoundaries.width) *
+            originalImage.width;
+          const imageCenterY =
+            (((obj.top || 0) - (imageBoundaries.top - viewportTop)) /
+              imageBoundaries.height) *
+            originalImage.height;
+
+          // Create new circle with correct center positioning
           newObj = new fabric.Circle({
             radius,
-            left: targetX - radius, // Adjust position to account for radius
-            top: targetY - radius,
+            left: imageCenterX,
+            top: imageCenterY,
             fill: obj.fill,
             stroke: obj.stroke,
             strokeWidth: (obj.strokeWidth || 1) * scaleRatioX,
+            originX: "center",
+            originY: "center",
           });
         } else if (obj instanceof fabric.Rect) {
           // For rectangles, scale width and height
