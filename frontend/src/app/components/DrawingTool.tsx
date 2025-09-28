@@ -172,32 +172,28 @@ export default function DrawingTool({
           });
           break;
         case "polygon":
-          if (polygonPointsRef.current.length === 0) {
-            polygonPointsRef.current.push({ x: pointer.x, y: pointer.y });
+          // Store the point coordinates regardless of whether this is the first or subsequent point
+          polygonPointsRef.current.push({ x: pointer.x, y: pointer.y });
 
-            // Create a new polygon with initial point
-            shapeRef.current = new fabric.Polygon(
-              [{ x: pointer.x, y: pointer.y }],
-              {
-                fill: fabric.Color.fromHex(fillColor).setAlpha(0.3).toRgba(), // Semi-transparent fill preview
-                stroke: strokeColor,
-                strokeWidth,
-                selectable: false,
-              }
-            );
-            canvas.add(shapeRef.current);
-          } else {
-            // Add new point to existing polygon
-            polygonPointsRef.current.push({ x: pointer.x, y: pointer.y });
+          // Create a visual marker for the point
+          const pointMarker = new fabric.Circle({
+            left: pointer.x,
+            top: pointer.y,
+            radius: 4,
+            fill: strokeColor,
+            stroke: "#ffffff",
+            strokeWidth: 1,
+            selectable: false,
+            originX: "center",
+            originY: "center",
+          });
 
-            // Update polygon with new points
-            if (shapeRef.current) {
-              (shapeRef.current as fabric.Polygon).set({
-                points: [...polygonPointsRef.current],
-              });
-              canvas.renderAll();
-            }
-          }
+          // Add the marker to the canvas
+          canvas.add(pointMarker);
+          canvas.renderAll();
+
+          // We're not using shapeRef for the polygon during drawing anymore,
+          // only tracking points and showing markers
           return;
       }
 
@@ -274,16 +270,49 @@ export default function DrawingTool({
     };
 
     const dblClickHandler = () => {
-      if (activeShape !== "polygon" || !shapeRef.current) return;
+      if (activeShape !== "polygon") return;
 
       // Finish polygon on double click
       isDrawingRef.current = false;
-      (shapeRef.current as fabric.Polygon).set({
-        selectable: true,
-        fill: fillColor,
-      });
 
-      canvas.renderAll();
+      // Only create a polygon if we have at least 3 points
+      if (polygonPointsRef.current.length >= 3) {
+        // Remove all point markers (all circles used as markers)
+        canvas.getObjects().forEach((obj) => {
+          if (
+            obj instanceof fabric.Circle &&
+            obj.radius === 4 &&
+            !obj.selectable
+          ) {
+            canvas.remove(obj);
+          }
+        });
+
+        // Create the final polygon with all the collected points
+        const finalPolygon = new fabric.Polygon([...polygonPointsRef.current], {
+          fill: fillColor,
+          stroke: strokeColor,
+          strokeWidth,
+          selectable: true,
+        });
+
+        // Add the polygon to the canvas
+        canvas.add(finalPolygon);
+        canvas.renderAll();
+      } else {
+        // If fewer than 3 points, just remove all markers
+        canvas.getObjects().forEach((obj) => {
+          if (
+            obj instanceof fabric.Circle &&
+            obj.radius === 4 &&
+            !obj.selectable
+          ) {
+            canvas.remove(obj);
+          }
+        });
+      }
+
+      // Reset for next polygon
       polygonPointsRef.current = [];
       shapeRef.current = null;
     };
@@ -579,6 +608,24 @@ export default function DrawingTool({
     setActiveShape(null);
   }, [saveCanvasImage]);
 
+  // Function to clean up unfinished polygons
+  const cleanupUnfinishedPolygon = useCallback(() => {
+    if (!canvasRef.current || activeShape !== "polygon") return;
+
+    const canvas = canvasRef.current;
+
+    // Remove all point markers
+    canvas.getObjects().forEach((obj) => {
+      if (obj instanceof fabric.Circle && obj.radius === 4 && !obj.selectable) {
+        canvas.remove(obj);
+      }
+    });
+
+    // Reset points array
+    polygonPointsRef.current = [];
+    canvas.renderAll();
+  }, [activeShape]);
+
   // Handle click outside toolbar and image
   const handleClickOutside = useCallback(
     (event: MouseEvent) => {
@@ -602,6 +649,10 @@ export default function DrawingTool({
       if (!isInImage) {
         // If we have an active shape and clicked outside image, save changes
         if (activeShape) {
+          // Cleanup polygon points if we're drawing a polygon
+          if (activeShape === "polygon") {
+            cleanupUnfinishedPolygon();
+          }
           saveCanvasImage();
           setActiveShape(null);
         }
@@ -610,7 +661,7 @@ export default function DrawingTool({
       }
       // If clicked inside image, keep drawing tools open
     },
-    [activeShape, saveCanvasImage, isPointInImage]
+    [activeShape, saveCanvasImage, isPointInImage, cleanupUnfinishedPolygon]
   );
 
   // Set up click outside detection
@@ -646,6 +697,10 @@ export default function DrawingTool({
   };
 
   const handleShapeSelect = (shape: string) => {
+    // If switching from polygon to another tool, clean up unfinished polygon
+    if (activeShape === "polygon" && shape !== "polygon") {
+      cleanupUnfinishedPolygon();
+    }
     setActiveShape(shape);
   }; // Render the vertical toolbar similar to Photoshop
   const verticalToolbar = (
