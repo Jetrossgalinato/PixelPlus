@@ -97,18 +97,18 @@ def draw_rectangle(
     # Parse colors using helper function
     bgr_color = parse_color(color)
     
-    # Draw rectangle
+    # Draw rectangle with thicker border
+    thicker = max(2, thickness * 3)
     if fill_color:
         # Parse fill color using helper function
         bgr_fill = parse_color(fill_color)
-        
         # Draw filled rectangle
         cv2.rectangle(img, (x, y), (x + width, y + height), bgr_fill, -1)  # Filled
         # Draw border
-        cv2.rectangle(img, (x, y), (x + width, y + height), bgr_color, thickness)
+        cv2.rectangle(img, (x, y), (x + width, y + height), bgr_color, thicker)
     else:
         # Draw outline only
-        cv2.rectangle(img, (x, y), (x + width, y + height), bgr_color, thickness)
+        cv2.rectangle(img, (x, y), (x + width, y + height), bgr_color, thicker)
     
     # Return the modified image
     return {"image": image_to_base64(img)}
