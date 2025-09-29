@@ -1,20 +1,39 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Pencil, Square, Circle, Type, Move, Trash2 } from "lucide-react";
+import { Pencil, Square, Circle, Type, Trash2 } from "lucide-react";
 import * as fabric from "fabric";
+import * as drawingService from "../services/drawingService";
+
+// Define a type that augments Fabric.js objects with missing types in their definitions
+declare module "fabric" {
+  interface Object {
+    bringToFront(): fabric.Object;
+  }
+
+  interface Polygon {
+    bringToFront(): fabric.Polygon;
+  }
+
+  interface Line {
+    bringToFront(): fabric.Line;
+  }
+}
 
 type DrawingToolProps = {
   imageDataUrl: string | null;
   onResult: (url: string, originalForUndo?: string) => void;
   disabled?: boolean;
   className?: string;
+  onDrawingChange?: (isDrawing: boolean) => void;
 };
 
 export default function DrawingTool({
   imageDataUrl,
   onResult,
   disabled = false,
+  onDrawingChange,
 }: DrawingToolProps) {
+  // === State definitions ===
   const [showToolbar, setShowToolbar] = useState(false);
   const [activeShape, setActiveShape] = useState<string | null>(null);
   const [textInput, setTextInput] = useState("");
@@ -23,6 +42,8 @@ export default function DrawingTool({
   const [strokeWidth, setStrokeWidth] = useState(2);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+
+  // === Refs ===
   const canvasRef = useRef<fabric.Canvas | null>(null);
   const canvasWrapperRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
@@ -31,6 +52,33 @@ export default function DrawingTool({
   const shapeRef = useRef<fabric.Object | null>(null);
   const startPointRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const polygonPointsRef = useRef<{ x: number; y: number }[]>([]);
+
+  // === Helper Functions (define all utility functions first) ===
+
+  // Function to convert RGBA to hex format for backend processing
+  const rgbaToHex = useCallback((rgba: string): string => {
+    if (!rgba.startsWith("rgba")) return rgba;
+
+    try {
+      // Extract RGB values from rgba
+      const rgbaValues = rgba.replace("rgba(", "").replace(")", "").split(",");
+
+      const r = parseInt(rgbaValues[0].trim());
+      const g = parseInt(rgbaValues[1].trim());
+      const b = parseInt(rgbaValues[2].trim());
+
+      // Convert to hex
+      const toHex = (c: number): string => {
+        const hex = c.toString(16);
+        return hex.length === 1 ? "0" + hex : hex;
+      };
+
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    } catch (e) {
+      console.error("Error converting RGBA to hex:", e);
+      return "#000000"; // Default fallback color
+    }
+  }, []);
 
   // Function to get image preview element boundaries
   const getImageBoundaries = useCallback(() => {
@@ -67,6 +115,511 @@ export default function DrawingTool({
       );
     },
     [getImageBoundaries]
+  );
+
+  // Save canvas as image and provide to parent component
+  const saveCanvasImage = useCallback(async () => {
+    if (!canvasRef.current || !imageDataUrl) {
+      console.log("Cannot save - canvas or image is missing");
+      return;
+    }
+
+    const canvas = canvasRef.current;
+
+    // Check if there are any drawings on the canvas
+    if (canvas.getObjects().length === 0) {
+      // No drawings, just return the original image
+      onResult(imageDataUrl, imageDataUrl);
+      return imageDataUrl;
+    }
+
+    try {
+      // Get the image preview element boundaries to ensure proper positioning
+      const imageBoundaries = getImageBoundaries();
+      if (!imageBoundaries) {
+        console.error("Could not get image boundaries");
+        return;
+      }
+
+      // Create new image from original data to get dimensions
+      const originalImage = new Image();
+
+      await new Promise<void>((resolve) => {
+        originalImage.onload = () => resolve();
+        originalImage.src = imageDataUrl;
+      });
+
+      // Calculate scale ratio between display size and actual image size
+      const scaleRatioX = originalImage.width / imageBoundaries.width;
+      const scaleRatioY = originalImage.height / imageBoundaries.height;
+
+      // Start with the original image
+      let processedImage = imageDataUrl;
+
+      console.log(`Processing ${canvas.getObjects().length} objects on canvas`);
+
+      // Process each object on the canvas and send to backend
+      for (const obj of canvas.getObjects()) {
+        // Skip point markers (small circles used for polygon points)
+        if (
+          obj instanceof fabric.Circle &&
+          obj.radius === 4 &&
+          !obj.selectable
+        ) {
+          continue;
+        }
+
+        const objType = obj.type;
+        console.log(`Processing object type: ${objType}`);
+
+        const left = obj.left || 0;
+        const top = obj.top || 0;
+
+        // Calculate the actual coordinates on the image
+        const imageLeft = imageBoundaries.left;
+        const imageTop = imageBoundaries.top;
+
+        // Adjust coordinates relative to the image
+        const relativeLeft = left - imageLeft;
+        const relativeTop = top - imageTop;
+
+        // Scale to actual image size
+        const scaledLeft = Math.round(relativeLeft * scaleRatioX);
+        const scaledTop = Math.round(relativeTop * scaleRatioY);
+
+        // Get object color properties
+        const strokeColor = obj.stroke || "#000000";
+        const fillColor =
+          obj.fill && obj.fill !== "rgba(0,0,0,0)"
+            ? (obj.fill as string)
+            : null;
+        const strokeWidth = obj.strokeWidth || 2;
+
+        switch (objType) {
+          case "line":
+            if ("x1" in obj && "y1" in obj && "x2" in obj && "y2" in obj) {
+              // Type cast to fabric.Line
+              const lineObj = obj as fabric.Line;
+
+              // For lines, we need to calculate the start and end points
+              // Get line coordinates
+              const x1 = Math.round(
+                ((lineObj.x1 as number) - imageLeft) * scaleRatioX
+              );
+              const y1 = Math.round(
+                ((lineObj.y1 as number) - imageTop) * scaleRatioY
+              );
+              const x2 = Math.round(
+                ((lineObj.x2 as number) - imageLeft) * scaleRatioX
+              );
+              const y2 = Math.round(
+                ((lineObj.y2 as number) - imageTop) * scaleRatioY
+              );
+
+              processedImage = await drawingService.drawLine(
+                processedImage,
+                x1,
+                y1,
+                x2,
+                y2,
+                strokeColor as string,
+                strokeWidth as number
+              );
+            }
+            break;
+
+          case "rect":
+            // Type cast to fabric.Rect
+            const rectObj = obj as fabric.Rect;
+            const rectWidth = Math.round(
+              ((rectObj.width || 0) as number) * scaleRatioX
+            );
+            const rectHeight = Math.round(
+              ((rectObj.height || 0) as number) * scaleRatioY
+            );
+
+            processedImage = await drawingService.drawRectangle(
+              processedImage,
+              scaledLeft,
+              scaledTop,
+              rectWidth,
+              rectHeight,
+              strokeColor as string,
+              fillColor ? rgbaToHex(fillColor) : null,
+              strokeWidth as number
+            );
+            break;
+
+          case "circle":
+            // Type cast to fabric.Circle to access radius property
+            const circleObj = obj as fabric.Circle;
+            const radius = Math.round((circleObj.radius || 0) * scaleRatioX);
+
+            processedImage = await drawingService.drawCircle(
+              processedImage,
+              scaledLeft,
+              scaledTop,
+              radius,
+              strokeColor as string,
+              fillColor ? rgbaToHex(fillColor) : null,
+              strokeWidth as number
+            );
+            break;
+
+          case "polygon":
+            if ("points" in obj && obj.points) {
+              // Type cast to fabric.Polygon
+              const polygonObj = obj as fabric.Polygon;
+
+              console.log(
+                `Processing polygon with ${polygonObj.points.length} points`
+              );
+
+              // Convert points to backend format
+              const points = (
+                polygonObj.points as { x: number; y: number }[]
+              ).map((p) => {
+                // Calculate absolute position of each point
+                const absoluteX = p.x + (obj.left || 0);
+                const absoluteY = p.y + (obj.top || 0);
+
+                // Calculate position relative to image
+                const relX = absoluteX - imageLeft;
+                const relY = absoluteY - imageTop;
+
+                // Scale to actual image size
+                const x = Math.round(relX * scaleRatioX);
+                const y = Math.round(relY * scaleRatioY);
+
+                return [x, y];
+              });
+
+              console.log(`Sending polygon with points:`, points);
+
+              // Process fill color for backend
+              const processedFillColor = fillColor
+                ? rgbaToHex(fillColor)
+                : null;
+
+              console.log(
+                `Polygon colors - stroke: ${strokeColor}, fill: ${processedFillColor}`
+              );
+
+              processedImage = await drawingService.drawPolygon(
+                processedImage,
+                points,
+                strokeColor as string,
+                processedFillColor,
+                strokeWidth as number
+              );
+            }
+            break;
+
+          case "textbox":
+          case "i-text":
+            if ("text" in obj) {
+              // Type cast to fabric.Textbox or fabric.IText
+              const textObj = obj as fabric.Textbox | fabric.IText;
+              const text = (textObj.text as string) || "";
+              const fontSize = (textObj.fontSize || 20) as number;
+
+              processedImage = await drawingService.addText(
+                processedImage,
+                text,
+                scaledLeft,
+                scaledTop,
+                fontSize,
+                fillColor || (strokeColor as string),
+                strokeWidth as number
+              );
+            }
+            break;
+        }
+      }
+
+      console.log("Drawing saved using backend API");
+      onResult(processedImage, imageDataUrl);
+      return processedImage;
+    } catch (error) {
+      console.error("Error saving canvas image:", error);
+    }
+  }, [imageDataUrl, onResult, getImageBoundaries, rgbaToHex]);
+
+  // Simple wrapper for the canvas saving logic (used in multiple places)
+  const processCanvasAndSave = useCallback(async () => {
+    if (canvasRef.current && imageDataUrl) {
+      const dataUrl = canvasRef.current.toDataURL();
+      onResult(dataUrl, imageDataUrl);
+    }
+  }, [imageDataUrl, onResult]);
+
+  // Handler for finishing a polygon drawing
+  const finishPolygon = useCallback(
+    (canvas: fabric.Canvas) => {
+      if (polygonPointsRef.current.length < 3) {
+        console.log("Not enough points to create polygon, need at least 3");
+        // Remove point markers and temporary lines
+        canvas.getObjects().forEach((obj) => {
+          if (
+            (obj instanceof fabric.Circle &&
+              obj.radius === 4 &&
+              !obj.selectable) ||
+            (obj instanceof fabric.Line &&
+              obj.strokeDashArray &&
+              obj.strokeDashArray[0] === 5)
+          ) {
+            canvas.remove(obj);
+          }
+        });
+        polygonPointsRef.current = [];
+        return;
+      }
+
+      console.log(
+        `Creating polygon with ${polygonPointsRef.current.length} points`
+      );
+
+      // Remove all point markers and temporary lines
+      canvas.getObjects().forEach((obj) => {
+        if (
+          (obj instanceof fabric.Circle &&
+            obj.radius === 4 &&
+            !obj.selectable) ||
+          (obj instanceof fabric.Line &&
+            obj.strokeDashArray &&
+            obj.strokeDashArray[0] === 5)
+        ) {
+          canvas.remove(obj);
+        }
+      });
+
+      // Create the final polygon with all the collected points
+      const finalPolygon = new fabric.Polygon([...polygonPointsRef.current], {
+        fill: fabric.Color.fromHex(fillColor).setAlpha(0.5).toRgba(),
+        stroke: strokeColor,
+        strokeWidth,
+        selectable: true,
+        perPixelTargetFind: true, // Improve selection behavior
+        objectCaching: false, // Disable object caching for better rendering
+        evented: true, // Make sure it responds to events
+      });
+
+      // Add the polygon to the canvas
+      canvas.add(finalPolygon);
+
+      // Bring polygon to front to ensure visibility
+      canvas.bringObjectToFront(finalPolygon);
+
+      // Close the polygon by connecting the first and last points if needed
+      if (polygonPointsRef.current.length > 2) {
+        const first = polygonPointsRef.current[0];
+        const last =
+          polygonPointsRef.current[polygonPointsRef.current.length - 1];
+
+        // Only add closing line if the first and last points aren't the same
+        if (first.x !== last.x || first.y !== last.y) {
+          const closingLine = new fabric.Line(
+            [last.x, last.y, first.x, first.y],
+            {
+              stroke: strokeColor,
+              strokeWidth,
+              selectable: false,
+            }
+          );
+
+          // Bring to front to ensure visibility and then remove after rendering
+          canvas.add(closingLine);
+          canvas.bringObjectToFront(closingLine);
+          canvas.remove(closingLine);
+        }
+      }
+
+      canvas.renderAll();
+
+      // Log the polygon's properties for debugging
+      console.log("Polygon created:", {
+        points: finalPolygon.points,
+        fill: finalPolygon.fill,
+        stroke: finalPolygon.stroke,
+        visible: finalPolygon.visible,
+        selectable: finalPolygon.selectable,
+        evented: finalPolygon.evented,
+      });
+
+      // Reset for next polygon
+      const pointsCopy = [...polygonPointsRef.current]; // Store a copy for the direct API call
+      polygonPointsRef.current = [];
+      shapeRef.current = null;
+
+      // Get boundaries for direct API call
+      const imageBoundaries = getImageBoundaries();
+      if (imageBoundaries && imageDataUrl) {
+        // Create a new image to get real dimensions
+        const img = new Image();
+        img.onload = async () => {
+          // Calculate scale factors
+          const scaleX = img.width / imageBoundaries.width;
+          const scaleY = img.height / imageBoundaries.height;
+
+          // Convert points for direct API call
+          const apiPoints = pointsCopy.map((p) => {
+            const relX = p.x - imageBoundaries.left;
+            const relY = p.y - imageBoundaries.top;
+            return [Math.round(relX * scaleX), Math.round(relY * scaleY)];
+          });
+
+          console.log("Processing polygon points for API call:", apiPoints);
+
+          try {
+            // Direct API call to draw polygon to ensure it's processed
+            const processedFillColor = fabric.Color.fromHex(fillColor)
+              .setAlpha(0.5)
+              .toRgba();
+            const hexFillColor = rgbaToHex(processedFillColor);
+
+            const result = await drawingService.drawPolygon(
+              imageDataUrl,
+              apiPoints,
+              strokeColor,
+              hexFillColor,
+              strokeWidth
+            );
+
+            // Update the image with result
+            onResult(result, imageDataUrl);
+            setActiveShape("move");
+          } catch (error) {
+            console.error("Failed to draw polygon via API:", error);
+            // Fallback to regular canvas saving
+            processCanvasAndSave();
+            setActiveShape("move");
+          }
+        };
+        img.src = imageDataUrl;
+      } else {
+        // Fallback to regular canvas saving
+        processCanvasAndSave();
+        setActiveShape("move");
+      }
+    },
+    [
+      fillColor,
+      strokeColor,
+      strokeWidth,
+      imageDataUrl,
+      onResult,
+      getImageBoundaries,
+      rgbaToHex,
+      processCanvasAndSave,
+    ]
+  );
+
+  // Function to clean up unfinished polygons
+  const cleanupUnfinishedPolygon = useCallback(() => {
+    if (!canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+
+    // Remove all point markers
+    const markersToRemove: fabric.Circle[] = [];
+    canvas.getObjects().forEach((obj) => {
+      if (obj instanceof fabric.Circle && obj.radius === 4 && !obj.selectable) {
+        markersToRemove.push(obj);
+      }
+    });
+
+    // Remove all markers in a batch
+    if (markersToRemove.length > 0) {
+      markersToRemove.forEach((marker) => canvas.remove(marker));
+      canvas.renderAll();
+    }
+
+    // Reset points array
+    polygonPointsRef.current = [];
+  }, []);
+
+  // Clear canvas and reset
+  const clearCanvas = useCallback(() => {
+    if (!canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    canvas.clear(); // Clear all objects since we don't have a background to preserve
+
+    canvas.renderAll();
+  }, []);
+
+  const saveAndClose = useCallback(() => {
+    saveCanvasImage();
+    setActiveShape(null);
+  }, [saveCanvasImage]);
+
+  // Handle click outside toolbar and image
+  const handleClickOutside = useCallback(
+    (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      // Don't close if clicking on toolbar
+      if (toolbarRef.current && toolbarRef.current.contains(target)) {
+        return;
+      }
+
+      // Close color picker and settings if open
+      setShowColorPicker(false);
+      setShowSettings(false);
+
+      // Check if clicked within the image preview area
+      const clientX = event.clientX;
+      const clientY = event.clientY;
+      const isInImage = isPointInImage(clientX, clientY);
+
+      // If clicked outside the image preview area, close the drawing tools
+      if (!isInImage) {
+        // If we have an active shape and clicked outside image, save changes
+        if (activeShape) {
+          // Cleanup polygon points if we're drawing a polygon
+          if (activeShape === "polygon") {
+            cleanupUnfinishedPolygon();
+          }
+          saveCanvasImage();
+          setActiveShape(null);
+        }
+        // Close toolbar when clicking outside image
+        setShowToolbar(false);
+      }
+      // If clicked inside image, keep drawing tools open
+    },
+    [activeShape, saveCanvasImage, isPointInImage, cleanupUnfinishedPolygon]
+  );
+
+  // Tool button handlers
+  const handleDrawingButtonClick = useCallback(() => {
+    const newShowToolbar = !showToolbar;
+    setShowToolbar(newShowToolbar);
+    if (onDrawingChange) {
+      onDrawingChange(newShowToolbar);
+    }
+
+    // When opening toolbar, set default tool if none selected
+    if (newShowToolbar && !activeShape) {
+      setActiveShape("line"); // Default to line drawing when opened
+    }
+
+    // When closing toolbar, make sure to close related popovers too
+    if (!newShowToolbar) {
+      setShowColorPicker(false);
+      setShowSettings(false);
+    }
+  }, [showToolbar, activeShape, onDrawingChange]);
+
+  const handleShapeSelect = useCallback(
+    (shape: string) => {
+      // If switching from polygon to another tool, clean up unfinished polygon
+      if (activeShape === "polygon" && shape !== "polygon") {
+        cleanupUnfinishedPolygon();
+      }
+      setActiveShape(shape);
+    },
+    [activeShape, cleanupUnfinishedPolygon]
   );
 
   // Initialize canvas when toolbar is shown or image changes
@@ -114,7 +667,9 @@ export default function DrawingTool({
         canvasRef.current = null;
       };
     }
-  }, [imageDataUrl, showToolbar]); // Set up mouse event handlers for drawing shapes
+  }, [imageDataUrl, showToolbar]);
+
+  // Set up mouse event handlers for drawing shapes
   useEffect(() => {
     if (!canvasRef.current || !activeShape) return;
 
@@ -172,7 +727,7 @@ export default function DrawingTool({
           });
           break;
         case "polygon":
-          // Store the point coordinates regardless of whether this is the first or subsequent point
+          // Store the point coordinates for the polygon
           polygonPointsRef.current.push({ x: pointer.x, y: pointer.y });
 
           // Create a visual marker for the point
@@ -190,10 +745,29 @@ export default function DrawingTool({
 
           // Add the marker to the canvas
           canvas.add(pointMarker);
+
+          // If we have at least 2 points, draw a line between the last two points
+          if (polygonPointsRef.current.length > 1) {
+            const lastIdx = polygonPointsRef.current.length - 1;
+            const lastPoint = polygonPointsRef.current[lastIdx];
+            const prevPoint = polygonPointsRef.current[lastIdx - 1];
+
+            const line = new fabric.Line(
+              [prevPoint.x, prevPoint.y, lastPoint.x, lastPoint.y],
+              {
+                stroke: strokeColor,
+                strokeWidth: strokeWidth,
+                selectable: false,
+                strokeDashArray: [5, 5], // Make line dashed for better visibility
+              }
+            );
+
+            canvas.add(line);
+          }
+
           canvas.renderAll();
 
-          // We're not using shapeRef for the polygon during drawing anymore,
-          // only tracking points and showing markers
+          // We're not using shapeRef for the polygon during drawing
           return;
       }
 
@@ -275,46 +849,8 @@ export default function DrawingTool({
       // Finish polygon on double click
       isDrawingRef.current = false;
 
-      // Only create a polygon if we have at least 3 points
-      if (polygonPointsRef.current.length >= 3) {
-        // Remove all point markers (all circles used as markers)
-        canvas.getObjects().forEach((obj) => {
-          if (
-            obj instanceof fabric.Circle &&
-            obj.radius === 4 &&
-            !obj.selectable
-          ) {
-            canvas.remove(obj);
-          }
-        });
-
-        // Create the final polygon with all the collected points
-        const finalPolygon = new fabric.Polygon([...polygonPointsRef.current], {
-          fill: fillColor,
-          stroke: strokeColor,
-          strokeWidth,
-          selectable: true,
-        });
-
-        // Add the polygon to the canvas
-        canvas.add(finalPolygon);
-        canvas.renderAll();
-      } else {
-        // If fewer than 3 points, just remove all markers
-        canvas.getObjects().forEach((obj) => {
-          if (
-            obj instanceof fabric.Circle &&
-            obj.radius === 4 &&
-            !obj.selectable
-          ) {
-            canvas.remove(obj);
-          }
-        });
-      }
-
-      // Reset for next polygon
-      polygonPointsRef.current = [];
-      shapeRef.current = null;
+      // Call the polygon finishing function
+      finishPolygon(canvas);
     };
 
     canvas.on("mouse:down", mouseDownHandler);
@@ -328,7 +864,14 @@ export default function DrawingTool({
       canvas.off("mouse:up", mouseUpHandler);
       canvas.off("mouse:dblclick", dblClickHandler);
     };
-  }, [activeShape, fillColor, strokeColor, strokeWidth, isPointInImage]);
+  }, [
+    activeShape,
+    fillColor,
+    strokeColor,
+    strokeWidth,
+    isPointInImage,
+    finishPolygon,
+  ]);
 
   // Add text on click when text tool is active
   useEffect(() => {
@@ -388,6 +931,15 @@ export default function DrawingTool({
     } else {
       canvas.selection = false;
       canvas.forEachObject((obj: fabric.Object) => {
+        // Make sure temporary drawing markers aren't selectable
+        if (
+          obj instanceof fabric.Circle &&
+          obj.radius === 4 &&
+          !obj.selectable
+        ) {
+          // These are polygon point markers - keep them as is
+          return;
+        }
         obj.selectable = false;
         obj.evented = false;
       });
@@ -395,274 +947,6 @@ export default function DrawingTool({
 
     canvas.renderAll();
   }, [activeShape]);
-
-  // Clear canvas and reset
-  const clearCanvas = useCallback(() => {
-    if (!canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    canvas.clear(); // Clear all objects since we don't have a background to preserve
-
-    canvas.renderAll();
-  }, []);
-
-  // Save canvas as image and provide to parent component
-  const saveCanvasImage = useCallback(() => {
-    if (!canvasRef.current || !imageDataUrl) return;
-
-    const canvas = canvasRef.current;
-
-    // Check if there are any drawings on the canvas
-    if (canvas.getObjects().length === 0) {
-      // No drawings, just return the original image
-      onResult(imageDataUrl, imageDataUrl);
-      return imageDataUrl;
-    }
-
-    // Get the image preview element boundaries to ensure proper positioning
-    const imageBoundaries = getImageBoundaries();
-    if (!imageBoundaries) {
-      console.error("Could not get image boundaries");
-      return;
-    }
-
-    // Create a temporary canvas to combine original image with drawings
-    const tempCanvas = document.createElement("canvas");
-    const tempCtx = tempCanvas.getContext("2d");
-    if (!tempCtx) return;
-
-    // Create new image from original data
-    const originalImage = new Image();
-    originalImage.onload = () => {
-      // Set canvas size to match original image
-      tempCanvas.width = originalImage.width;
-      tempCanvas.height = originalImage.height;
-
-      // Draw original image
-      tempCtx.drawImage(originalImage, 0, 0);
-
-      // Instead of cloning objects individually, let's use a more direct approach
-      // We'll create a JSON representation of the canvas and calculate the correct scaling
-
-      // Calculate overall scale ratio between display size and actual image size
-      const scaleRatioX = originalImage.width / imageBoundaries.width;
-      const scaleRatioY = originalImage.height / imageBoundaries.height;
-
-      // Get the viewport scroll position
-      const viewportLeft = window.scrollX;
-      const viewportTop = window.scrollY;
-
-      // Adjust the canvas dimensions to match the original image
-      const exportCanvas = new fabric.Canvas(document.createElement("canvas"), {
-        width: tempCanvas.width,
-        height: tempCanvas.height,
-      });
-
-      // Copy each object from the drawing canvas to the export canvas with proper positioning
-      canvas.getObjects().forEach((obj) => {
-        // Create a clean copy through serialization (not needed directly in this approach)
-        // We're using direct property access instead
-
-        // Calculate relative position within the displayed image
-        const relX =
-          ((obj.left as number) - (imageBoundaries.left - viewportLeft)) /
-          imageBoundaries.width;
-        const relY =
-          ((obj.top as number) - (imageBoundaries.top - viewportTop)) /
-          imageBoundaries.height;
-
-        // Calculate absolute position on the target image
-        const targetX = relX * originalImage.width;
-        const targetY = relY * originalImage.height;
-
-        // Create a new object of the same type
-        let newObj: fabric.Object | null = null;
-
-        // Handle different object types
-        if (obj instanceof fabric.Line) {
-          // For lines, we need to scale the endpoints
-          const x1 =
-            (((obj.x1 || 0) - (imageBoundaries.left - viewportLeft)) /
-              imageBoundaries.width) *
-            originalImage.width;
-          const y1 =
-            (((obj.y1 || 0) - (imageBoundaries.top - viewportTop)) /
-              imageBoundaries.height) *
-            originalImage.height;
-          const x2 =
-            (((obj.x2 || 0) - (imageBoundaries.left - viewportLeft)) /
-              imageBoundaries.width) *
-            originalImage.width;
-          const y2 =
-            (((obj.y2 || 0) - (imageBoundaries.top - viewportTop)) /
-              imageBoundaries.height) *
-            originalImage.height;
-
-          newObj = new fabric.Line([x1, y1, x2, y2], {
-            stroke: obj.stroke,
-            strokeWidth: (obj.strokeWidth || 1) * scaleRatioX, // Scale stroke width
-            fill: obj.fill,
-          });
-        } else if (obj instanceof fabric.Circle) {
-          // For circles with center-based origin (our updated approach)
-          const radius = (obj.radius || 0) * scaleRatioX;
-
-          // Since we now set originX/Y to 'center' when creating the circle,
-          // obj.left and obj.top already represent the center point
-
-          // Convert this center point from screen to image coordinates
-          const imageCenterX =
-            (((obj.left || 0) - (imageBoundaries.left - viewportLeft)) /
-              imageBoundaries.width) *
-            originalImage.width;
-          const imageCenterY =
-            (((obj.top || 0) - (imageBoundaries.top - viewportTop)) /
-              imageBoundaries.height) *
-            originalImage.height;
-
-          // Create new circle with correct center positioning
-          newObj = new fabric.Circle({
-            radius,
-            left: imageCenterX,
-            top: imageCenterY,
-            fill: obj.fill,
-            stroke: obj.stroke,
-            strokeWidth: (obj.strokeWidth || 1) * scaleRatioX,
-            originX: "center",
-            originY: "center",
-          });
-        } else if (obj instanceof fabric.Rect) {
-          // For rectangles, scale width and height
-          const width = (obj.width || 0) * scaleRatioX;
-          const height = (obj.height || 0) * scaleRatioY;
-
-          newObj = new fabric.Rect({
-            left: targetX,
-            top: targetY,
-            width: width,
-            height: height,
-            fill: obj.fill,
-            stroke: obj.stroke,
-            strokeWidth: (obj.strokeWidth || 1) * scaleRatioX,
-          });
-        } else if (obj instanceof fabric.Polygon) {
-          // For polygons, scale all points
-          const scaledPoints = (obj.points || []).map((point) => ({
-            x:
-              ((point.x - (imageBoundaries.left - viewportLeft)) /
-                imageBoundaries.width) *
-              originalImage.width,
-            y:
-              ((point.y - (imageBoundaries.top - viewportTop)) /
-                imageBoundaries.height) *
-              originalImage.height,
-          }));
-
-          newObj = new fabric.Polygon(scaledPoints, {
-            fill: obj.fill,
-            stroke: obj.stroke,
-            strokeWidth: (obj.strokeWidth || 1) * scaleRatioX,
-          });
-        } else if (obj instanceof fabric.Textbox) {
-          // For text, scale font size and position
-          newObj = new fabric.Textbox(obj.text || "", {
-            left: targetX,
-            top: targetY,
-            fontSize: (obj.fontSize || 20) * scaleRatioX,
-            fill: obj.fill,
-            fontFamily: obj.fontFamily,
-          });
-        }
-
-        // Add the new object to the export canvas
-        if (newObj) {
-          exportCanvas.add(newObj);
-        }
-      });
-
-      // Render all objects in the export canvas
-      exportCanvas.renderAll();
-
-      // Draw the export canvas on top of the original image
-      tempCtx.drawImage(exportCanvas.getElement(), 0, 0);
-
-      // Get final composed image
-      const composedDataUrl = tempCanvas.toDataURL("image/png", 1.0);
-
-      // Clean up resources
-      try {
-        exportCanvas.dispose();
-      } catch (e) {
-        console.error("Error disposing export canvas:", e);
-      }
-
-      console.log("Drawing saved with proper positioning and scaling");
-      onResult(composedDataUrl, imageDataUrl);
-    };
-
-    originalImage.src = imageDataUrl;
-  }, [imageDataUrl, onResult, getImageBoundaries]);
-
-  const saveAndClose = useCallback(() => {
-    saveCanvasImage();
-    setActiveShape(null);
-  }, [saveCanvasImage]);
-
-  // Function to clean up unfinished polygons
-  const cleanupUnfinishedPolygon = useCallback(() => {
-    if (!canvasRef.current || activeShape !== "polygon") return;
-
-    const canvas = canvasRef.current;
-
-    // Remove all point markers
-    canvas.getObjects().forEach((obj) => {
-      if (obj instanceof fabric.Circle && obj.radius === 4 && !obj.selectable) {
-        canvas.remove(obj);
-      }
-    });
-
-    // Reset points array
-    polygonPointsRef.current = [];
-    canvas.renderAll();
-  }, [activeShape]);
-
-  // Handle click outside toolbar and image
-  const handleClickOutside = useCallback(
-    (event: MouseEvent) => {
-      const target = event.target as Node;
-
-      // Don't close if clicking on toolbar
-      if (toolbarRef.current && toolbarRef.current.contains(target)) {
-        return;
-      }
-
-      // Close color picker and settings if open
-      setShowColorPicker(false);
-      setShowSettings(false);
-
-      // Check if clicked within the image preview area
-      const clientX = event.clientX;
-      const clientY = event.clientY;
-      const isInImage = isPointInImage(clientX, clientY);
-
-      // If clicked outside the image preview area, close the drawing tools
-      if (!isInImage) {
-        // If we have an active shape and clicked outside image, save changes
-        if (activeShape) {
-          // Cleanup polygon points if we're drawing a polygon
-          if (activeShape === "polygon") {
-            cleanupUnfinishedPolygon();
-          }
-          saveCanvasImage();
-          setActiveShape(null);
-        }
-        // Close toolbar when clicking outside image
-        setShowToolbar(false);
-      }
-      // If clicked inside image, keep drawing tools open
-    },
-    [activeShape, saveCanvasImage, isPointInImage, cleanupUnfinishedPolygon]
-  );
 
   // Set up click outside detection
   useEffect(() => {
@@ -679,30 +963,7 @@ export default function DrawingTool({
     };
   }, [handleClickOutside]);
 
-  // Tool button handlers
-  const handleDrawingButtonClick = () => {
-    const newShowToolbar = !showToolbar;
-    setShowToolbar(newShowToolbar);
-
-    // When opening toolbar, set default tool if none selected
-    if (newShowToolbar && !activeShape) {
-      setActiveShape("line"); // Default to line drawing when opened
-    }
-
-    // When closing toolbar, make sure to close related popovers too
-    if (!newShowToolbar) {
-      setShowColorPicker(false);
-      setShowSettings(false);
-    }
-  };
-
-  const handleShapeSelect = (shape: string) => {
-    // If switching from polygon to another tool, clean up unfinished polygon
-    if (activeShape === "polygon" && shape !== "polygon") {
-      cleanupUnfinishedPolygon();
-    }
-    setActiveShape(shape);
-  }; // Render the vertical toolbar similar to Photoshop
+  // Render the vertical toolbar similar to Photoshop
   const verticalToolbar = (
     <div
       id="drawing-tools"
@@ -778,17 +1039,6 @@ export default function DrawingTool({
         title="Add Text"
       >
         <Type className="w-5 h-5" />
-      </button>
-      <button
-        onClick={() => handleShapeSelect("move")}
-        className={`p-2 rounded-md ${
-          activeShape === "move"
-            ? "bg-blue-500 text-white"
-            : "bg-gray-700 text-gray-200 hover:bg-gray-600"
-        }`}
-        title="Select and Move Objects"
-      >
-        <Move className="w-5 h-5" />
       </button>
 
       {/* Divider */}
@@ -922,8 +1172,6 @@ export default function DrawingTool({
           </div>
         </div>
       )}
-
-      {/* We don't need this text input here since we have one at the bottom */}
 
       {/* Help text for polygon */}
       {activeShape === "polygon" && (
