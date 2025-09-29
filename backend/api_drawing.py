@@ -74,7 +74,7 @@ def draw_line(
     bgr_color = parse_color(color)
     
     # Draw line on the image
-    thicker = max(2, thickness * 3)
+    thicker = max(2, thickness * 2)
     cv2.line(img, (start_x, start_y), (end_x, end_y), bgr_color, thicker)
     
     # Return the modified image
@@ -98,7 +98,7 @@ def draw_rectangle(
     bgr_color = parse_color(color)
     
     # Draw rectangle with thicker border
-    thicker = max(2, thickness * 3)
+    thicker = max(2, thickness * 2)
     if fill_color:
         # Parse fill color using helper function
         bgr_fill = parse_color(fill_color)
@@ -129,7 +129,7 @@ def draw_circle(
     # Parse colors using helper function
     bgr_color = parse_color(color)
     
-    thicker = max(2, thickness * 3)
+    thicker = max(2, thickness * 2)
     if fill_color:
         # Parse fill color using helper function
         bgr_fill = parse_color(fill_color)
@@ -199,19 +199,19 @@ def draw_polygon(
         # Create a copy of the image for drawing
         img_copy = img.copy()
         
+        thicker = max(2, thickness * 2)
         # Draw polygon
         if fill_color:
             # Parse fill color using helper function
             bgr_fill = parse_color(fill_color)
             print(f"Fill color: {fill_color}, BGR: {bgr_fill}")
-            
             # Draw filled polygon
             cv2.fillPoly(img_copy, [points_array], bgr_fill)
             # Draw border
-            cv2.polylines(img_copy, [points_array], True, bgr_color, thickness)
+            cv2.polylines(img_copy, [points_array], True, bgr_color, thicker)
         else:
             # Draw outline only
-            cv2.polylines(img_copy, [points_array], True, bgr_color, thickness)
+            cv2.polylines(img_copy, [points_array], True, bgr_color, thicker)
         
         # Check if anything was drawn by comparing the images
         diff = cv2.subtract(img_copy, img)
