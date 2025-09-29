@@ -10,6 +10,7 @@ import GrayscaleTool from "../components/GrayscaleTool";
 import RGBTool from "../components/RGBTool";
 import HSVTool from "../components/HSVTool";
 import DrawingTool from "../components/DrawingTool";
+import TranslationTool from "../components/TranslationTool";
 import { useImage } from "../ImageContext";
 
 export default function EditPage() {
@@ -411,6 +412,16 @@ export default function EditPage() {
               onResult={handleEditResult}
               disabled={processing || !(result || image.dataUrl)}
               onDrawingChange={setIsDrawing}
+            />
+          </div>
+          {/* Divider */}
+          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          {/* Translation Tool Button */}
+          <div className="w-full flex flex-col items-start">
+            <TranslationTool
+              imageDataUrl={result || image.dataUrl}
+              onResult={handleEditResult}
+              disabled={processing || !(result || image.dataUrl)}
             />
           </div>
           {/* Divider */}
