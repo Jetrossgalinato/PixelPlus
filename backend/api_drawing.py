@@ -74,7 +74,8 @@ def draw_line(
     bgr_color = parse_color(color)
     
     # Draw line on the image
-    cv2.line(img, (start_x, start_y), (end_x, end_y), bgr_color, thickness)
+    thicker = max(2, thickness * 3)
+    cv2.line(img, (start_x, start_y), (end_x, end_y), bgr_color, thicker)
     
     # Return the modified image
     return {"image": image_to_base64(img)}
