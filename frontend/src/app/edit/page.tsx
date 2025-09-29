@@ -366,7 +366,7 @@ export default function EditPage() {
             />
           </div>
           {/* Divider */}
-          <div className="w-10 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
           {/* HSV Tool Button */}
           <div className="w-full flex flex-col items-start">
             <HSVTool
@@ -386,7 +386,7 @@ export default function EditPage() {
             />
           </div>
           {/* Divider */}
-          <div className="w-10 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
           {/* RGB Tool Button */}
           <div className="w-full flex flex-col items-start">
             <RGBTool
@@ -403,7 +403,7 @@ export default function EditPage() {
             />
           </div>
           {/* Divider */}
-          <div className="w-10 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
           {/* Drawing Tool Button */}
           <div className="w-full flex flex-col items-start">
             <DrawingTool
@@ -414,7 +414,7 @@ export default function EditPage() {
             />
           </div>
           {/* Divider */}
-          <div className="w-10 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
         </div>
         {/* Spacer to push content to top */}
         <div className="flex-1" />
