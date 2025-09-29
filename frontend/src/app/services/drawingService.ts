@@ -128,26 +128,37 @@ export const drawPolygon = async (
   fillColor: string | null,
   thickness: number
 ): Promise<string> => {
-  const response = await fetch(`${API_BASE_URL}/drawing/polygon`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      image: imageBase64,
-      points: points,
-      color: color,
-      fill_color: fillColor,
-      thickness: thickness,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to draw polygon: ${response.statusText}`);
+  // Ensure we have at least 3 points for a valid polygon
+  if (!points || points.length < 3) {
+    console.warn("Cannot draw polygon: at least 3 points are required");
+    return imageBase64; // Return original image if not enough points
   }
 
-  const data = await response.json();
-  return data.image;
+  try {
+    const response = await fetch(`${API_BASE_URL}/drawing/polygon`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        image: imageBase64,
+        points: points,
+        color: color,
+        fill_color: fillColor,
+        thickness: thickness,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to draw polygon: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.image;
+  } catch (error) {
+    console.error("Error drawing polygon:", error);
+    return imageBase64; // Return original image on error
+  }
 };
 
 /**

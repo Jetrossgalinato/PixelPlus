@@ -21,6 +21,29 @@ def base64_to_image(base64_string):
     
     # Decode the numpy array to an image
     return cv2.imdecode(npimg, cv2.IMREAD_COLOR)
+    
+# Helper function to parse color string to BGR
+def parse_color(color_str):
+    """Parse color string (hex or rgba) to BGR tuple for OpenCV"""
+    if not color_str:
+        return (0, 0, 0)  # Default to black
+        
+    try:
+        if color_str.startswith('rgba'):
+            # Parse RGBA format: rgba(r,g,b,a)
+            rgba = color_str.replace('rgba(', '').replace(')', '').split(',')
+            r = int(rgba[0].strip())
+            g = int(rgba[1].strip())
+            b = int(rgba[2].strip())
+            return (b, g, r)  # Convert to BGR
+        else:
+            # Parse hex format: #RRGGBB
+            hex_color = color_str.lstrip('#')
+            rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+            return (rgb[2], rgb[1], rgb[0])  # Convert to BGR
+    except Exception as e:
+        print(f"Error parsing color: {color_str}, error: {str(e)}")
+        return (0, 0, 0)  # Default to black
 
 # Helper function to convert image to base64
 def image_to_base64(image):
@@ -47,10 +70,8 @@ def draw_line(
     # Convert base64 string to image
     img = base64_to_image(image)
     
-    # Parse color (hex to BGR)
-    hex_color = color.lstrip('#')
-    rgb_color = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-    bgr_color = (rgb_color[2], rgb_color[1], rgb_color[0])  # Convert RGB to BGR
+    # Parse color using helper function
+    bgr_color = parse_color(color)
     
     # Draw line on the image
     cv2.line(img, (start_x, start_y), (end_x, end_y), bgr_color, thickness)
@@ -72,17 +93,13 @@ def draw_rectangle(
     # Convert base64 string to image
     img = base64_to_image(image)
     
-    # Parse color (hex to BGR)
-    hex_color = color.lstrip('#')
-    rgb_color = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-    bgr_color = (rgb_color[2], rgb_color[1], rgb_color[0])
+    # Parse colors using helper function
+    bgr_color = parse_color(color)
     
     # Draw rectangle
     if fill_color:
-        # Parse fill color
-        hex_fill = fill_color.lstrip('#')
-        rgb_fill = tuple(int(hex_fill[i:i+2], 16) for i in (0, 2, 4))
-        bgr_fill = (rgb_fill[2], rgb_fill[1], rgb_fill[0])
+        # Parse fill color using helper function
+        bgr_fill = parse_color(fill_color)
         
         # Draw filled rectangle
         cv2.rectangle(img, (x, y), (x + width, y + height), bgr_fill, -1)  # Filled
@@ -108,17 +125,13 @@ def draw_circle(
     # Convert base64 string to image
     img = base64_to_image(image)
     
-    # Parse color (hex to BGR)
-    hex_color = color.lstrip('#')
-    rgb_color = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-    bgr_color = (rgb_color[2], rgb_color[1], rgb_color[0])
+    # Parse colors using helper function
+    bgr_color = parse_color(color)
     
     # Draw circle
     if fill_color:
-        # Parse fill color
-        hex_fill = fill_color.lstrip('#')
-        rgb_fill = tuple(int(hex_fill[i:i+2], 16) for i in (0, 2, 4))
-        bgr_fill = (rgb_fill[2], rgb_fill[1], rgb_fill[0])
+        # Parse fill color using helper function
+        bgr_fill = parse_color(fill_color)
         
         # Draw filled circle
         cv2.circle(img, (center_x, center_y), radius, bgr_fill, -1)  # Filled
@@ -139,35 +152,80 @@ def draw_polygon(
     fill_color: str = Body(None),
     thickness: int = Body(2)
 ):
-    # Convert base64 string to image
-    img = base64_to_image(image)
-    
-    # Parse color (hex to BGR)
-    hex_color = color.lstrip('#')
-    rgb_color = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-    bgr_color = (rgb_color[2], rgb_color[1], rgb_color[0])
-    
-    # Convert points list to numpy array
-    points_array = np.array(points, np.int32)
-    points_array = points_array.reshape((-1, 1, 2))
-    
-    # Draw polygon
-    if fill_color:
-        # Parse fill color
-        hex_fill = fill_color.lstrip('#')
-        rgb_fill = tuple(int(hex_fill[i:i+2], 16) for i in (0, 2, 4))
-        bgr_fill = (rgb_fill[2], rgb_fill[1], rgb_fill[0])
+    try:
+        # Convert base64 string to image
+        img = base64_to_image(image)
         
-        # Draw filled polygon
-        cv2.fillPoly(img, [points_array], bgr_fill)
-        # Draw border
-        cv2.polylines(img, [points_array], True, bgr_color, thickness)
-    else:
-        # Draw outline only
-        cv2.polylines(img, [points_array], True, bgr_color, thickness)
-    
-    # Return the modified image
-    return {"image": image_to_base64(img)}
+        # Parse color using helper function
+        bgr_color = parse_color(color)
+        
+        # Validate points format
+        if not points or not all(isinstance(p, list) and len(p) == 2 for p in points):
+            error_msg = f"Invalid polygon points format. Expected list of [x,y] coordinates, got: {points}"
+            print(error_msg)
+            return {"image": image_to_base64(img), "error": error_msg}
+        
+        # Convert points list to numpy array for OpenCV
+        points_array = np.array(points, np.int32)
+        
+        # Ensure we have at least 3 points for a valid polygon
+        if len(points_array) < 3:
+            error_msg = f"Insufficient points for polygon: {len(points_array)}, need at least 3"
+            print(error_msg)
+            return {"image": image_to_base64(img), "error": error_msg}
+        
+        # Log points for debugging
+        print(f"Drawing polygon with {len(points_array)} points: {points}")
+        
+        # Ensure points are within image boundaries
+        h, w = img.shape[:2]
+        valid_points = True
+        for p in points_array:
+            if p[0] < 0 or p[0] >= w or p[1] < 0 or p[1] >= h:
+                print(f"Warning: Point {p} is outside image boundaries [{w}x{h}]")
+                valid_points = False
+        
+        if not valid_points:
+            # Clip points to image boundaries to prevent errors
+            points_array = np.array([[
+                min(max(p[0], 0), w-1), 
+                min(max(p[1], 0), h-1)
+            ] for p in points_array], np.int32)
+            print("Points have been clipped to image boundaries")
+        
+        # Reshape the array as required by OpenCV's polygon functions
+        points_array = points_array.reshape((-1, 1, 2))
+        
+        # Create a copy of the image for drawing
+        img_copy = img.copy()
+        
+        # Draw polygon
+        if fill_color:
+            # Parse fill color using helper function
+            bgr_fill = parse_color(fill_color)
+            print(f"Fill color: {fill_color}, BGR: {bgr_fill}")
+            
+            # Draw filled polygon
+            cv2.fillPoly(img_copy, [points_array], bgr_fill)
+            # Draw border
+            cv2.polylines(img_copy, [points_array], True, bgr_color, thickness)
+        else:
+            # Draw outline only
+            cv2.polylines(img_copy, [points_array], True, bgr_color, thickness)
+        
+        # Check if anything was drawn by comparing the images
+        diff = cv2.subtract(img_copy, img)
+        has_diff = np.any(diff)
+        if not has_diff:
+            print("Warning: No visible changes after drawing polygon")
+        
+        # Return the modified image
+        return {"image": image_to_base64(img_copy), "success": True}
+    except Exception as e:
+        error_message = f"Error drawing polygon: {str(e)}"
+        print(error_message)
+        # Return original image if drawing fails
+        return {"image": image, "error": error_message}
 
 @router.post("/drawing/text")
 def add_text(
@@ -183,10 +241,8 @@ def add_text(
     # Convert base64 string to image
     img = base64_to_image(image)
     
-    # Parse color (hex to BGR)
-    hex_color = color.lstrip('#')
-    rgb_color = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-    bgr_color = (rgb_color[2], rgb_color[1], rgb_color[0])
+    # Parse color using helper function
+    bgr_color = parse_color(color)
     
     # Add text to the image
     cv2.putText(img, text, (x, y), font_face, font_scale, bgr_color, thickness)
