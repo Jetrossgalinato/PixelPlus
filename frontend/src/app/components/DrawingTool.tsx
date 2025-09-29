@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Pencil, Square, Circle, Type, Move, Trash2 } from "lucide-react";
 import * as fabric from "fabric";
+import * as drawingService from "../services/drawingService";
 
 type DrawingToolProps = {
   imageDataUrl: string | null;
@@ -407,7 +408,7 @@ export default function DrawingTool({
   }, []);
 
   // Save canvas as image and provide to parent component
-  const saveCanvasImage = useCallback(() => {
+  const saveCanvasImage = useCallback(async () => {
     if (!canvasRef.current || !imageDataUrl) return;
 
     const canvas = canvasRef.current;
@@ -419,188 +420,188 @@ export default function DrawingTool({
       return imageDataUrl;
     }
 
-    // Get the image preview element boundaries to ensure proper positioning
-    const imageBoundaries = getImageBoundaries();
-    if (!imageBoundaries) {
-      console.error("Could not get image boundaries");
-      return;
-    }
+    try {
+      // Get the image preview element boundaries to ensure proper positioning
+      const imageBoundaries = getImageBoundaries();
+      if (!imageBoundaries) {
+        console.error("Could not get image boundaries");
+        return;
+      }
 
-    // Create a temporary canvas to combine original image with drawings
-    const tempCanvas = document.createElement("canvas");
-    const tempCtx = tempCanvas.getContext("2d");
-    if (!tempCtx) return;
+      // Create new image from original data to get dimensions
+      const originalImage = new Image();
 
-    // Create new image from original data
-    const originalImage = new Image();
-    originalImage.onload = () => {
-      // Set canvas size to match original image
-      tempCanvas.width = originalImage.width;
-      tempCanvas.height = originalImage.height;
+      await new Promise<void>((resolve) => {
+        originalImage.onload = () => resolve();
+        originalImage.src = imageDataUrl;
+      });
 
-      // Draw original image
-      tempCtx.drawImage(originalImage, 0, 0);
-
-      // Instead of cloning objects individually, let's use a more direct approach
-      // We'll create a JSON representation of the canvas and calculate the correct scaling
-
-      // Calculate overall scale ratio between display size and actual image size
+      // Calculate scale ratio between display size and actual image size
       const scaleRatioX = originalImage.width / imageBoundaries.width;
       const scaleRatioY = originalImage.height / imageBoundaries.height;
 
-      // Get the viewport scroll position
-      const viewportLeft = window.scrollX;
-      const viewportTop = window.scrollY;
+      // Start with the original image
+      let processedImage = imageDataUrl;
 
-      // Adjust the canvas dimensions to match the original image
-      const exportCanvas = new fabric.Canvas(document.createElement("canvas"), {
-        width: tempCanvas.width,
-        height: tempCanvas.height,
-      });
+      // Process each object on the canvas and send to backend
+      for (const obj of canvas.getObjects()) {
+        const objType = obj.type;
+        const left = obj.left || 0;
+        const top = obj.top || 0;
 
-      // Copy each object from the drawing canvas to the export canvas with proper positioning
-      canvas.getObjects().forEach((obj) => {
-        // Create a clean copy through serialization (not needed directly in this approach)
-        // We're using direct property access instead
+        // Calculate the actual coordinates on the image
+        const imageLeft = imageBoundaries.left;
+        const imageTop = imageBoundaries.top;
 
-        // Calculate relative position within the displayed image
-        const relX =
-          ((obj.left as number) - (imageBoundaries.left - viewportLeft)) /
-          imageBoundaries.width;
-        const relY =
-          ((obj.top as number) - (imageBoundaries.top - viewportTop)) /
-          imageBoundaries.height;
+        // Adjust coordinates relative to the image
+        const relativeLeft = left - imageLeft;
+        const relativeTop = top - imageTop;
 
-        // Calculate absolute position on the target image
-        const targetX = relX * originalImage.width;
-        const targetY = relY * originalImage.height;
+        // Scale to actual image size
+        const scaledLeft = Math.round(relativeLeft * scaleRatioX);
+        const scaledTop = Math.round(relativeTop * scaleRatioY);
 
-        // Create a new object of the same type
-        let newObj: fabric.Object | null = null;
+        // Get object color properties
+        const strokeColor = obj.stroke || "#000000";
+        const fillColor =
+          obj.fill && obj.fill !== "rgba(0,0,0,0)"
+            ? (obj.fill as string)
+            : null;
+        const strokeWidth = obj.strokeWidth || 2;
 
-        // Handle different object types
-        if (obj instanceof fabric.Line) {
-          // For lines, we need to scale the endpoints
-          const x1 =
-            (((obj.x1 || 0) - (imageBoundaries.left - viewportLeft)) /
-              imageBoundaries.width) *
-            originalImage.width;
-          const y1 =
-            (((obj.y1 || 0) - (imageBoundaries.top - viewportTop)) /
-              imageBoundaries.height) *
-            originalImage.height;
-          const x2 =
-            (((obj.x2 || 0) - (imageBoundaries.left - viewportLeft)) /
-              imageBoundaries.width) *
-            originalImage.width;
-          const y2 =
-            (((obj.y2 || 0) - (imageBoundaries.top - viewportTop)) /
-              imageBoundaries.height) *
-            originalImage.height;
+        switch (objType) {
+          case "line":
+            if ("x1" in obj && "y1" in obj && "x2" in obj && "y2" in obj) {
+              // Type cast to fabric.Line
+              const lineObj = obj as fabric.Line;
 
-          newObj = new fabric.Line([x1, y1, x2, y2], {
-            stroke: obj.stroke,
-            strokeWidth: (obj.strokeWidth || 1) * scaleRatioX, // Scale stroke width
-            fill: obj.fill,
-          });
-        } else if (obj instanceof fabric.Circle) {
-          // For circles with center-based origin (our updated approach)
-          const radius = (obj.radius || 0) * scaleRatioX;
+              // For lines, we need to calculate the start and end points
+              // Get line coordinates
+              const x1 = Math.round(
+                ((lineObj.x1 as number) - imageLeft) * scaleRatioX
+              );
+              const y1 = Math.round(
+                ((lineObj.y1 as number) - imageTop) * scaleRatioY
+              );
+              const x2 = Math.round(
+                ((lineObj.x2 as number) - imageLeft) * scaleRatioX
+              );
+              const y2 = Math.round(
+                ((lineObj.y2 as number) - imageTop) * scaleRatioY
+              );
 
-          // Since we now set originX/Y to 'center' when creating the circle,
-          // obj.left and obj.top already represent the center point
+              processedImage = await drawingService.drawLine(
+                processedImage,
+                x1,
+                y1,
+                x2,
+                y2,
+                strokeColor as string,
+                strokeWidth as number
+              );
+            }
+            break;
 
-          // Convert this center point from screen to image coordinates
-          const imageCenterX =
-            (((obj.left || 0) - (imageBoundaries.left - viewportLeft)) /
-              imageBoundaries.width) *
-            originalImage.width;
-          const imageCenterY =
-            (((obj.top || 0) - (imageBoundaries.top - viewportTop)) /
-              imageBoundaries.height) *
-            originalImage.height;
+          case "rect":
+            // Type cast to fabric.Rect
+            const rectObj = obj as fabric.Rect;
+            const rectWidth = Math.round(
+              ((rectObj.width || 0) as number) * scaleRatioX
+            );
+            const rectHeight = Math.round(
+              ((rectObj.height || 0) as number) * scaleRatioY
+            );
 
-          // Create new circle with correct center positioning
-          newObj = new fabric.Circle({
-            radius,
-            left: imageCenterX,
-            top: imageCenterY,
-            fill: obj.fill,
-            stroke: obj.stroke,
-            strokeWidth: (obj.strokeWidth || 1) * scaleRatioX,
-            originX: "center",
-            originY: "center",
-          });
-        } else if (obj instanceof fabric.Rect) {
-          // For rectangles, scale width and height
-          const width = (obj.width || 0) * scaleRatioX;
-          const height = (obj.height || 0) * scaleRatioY;
+            processedImage = await drawingService.drawRectangle(
+              processedImage,
+              scaledLeft,
+              scaledTop,
+              rectWidth,
+              rectHeight,
+              strokeColor as string,
+              fillColor,
+              strokeWidth as number
+            );
+            break;
 
-          newObj = new fabric.Rect({
-            left: targetX,
-            top: targetY,
-            width: width,
-            height: height,
-            fill: obj.fill,
-            stroke: obj.stroke,
-            strokeWidth: (obj.strokeWidth || 1) * scaleRatioX,
-          });
-        } else if (obj instanceof fabric.Polygon) {
-          // For polygons, scale all points
-          const scaledPoints = (obj.points || []).map((point) => ({
-            x:
-              ((point.x - (imageBoundaries.left - viewportLeft)) /
-                imageBoundaries.width) *
-              originalImage.width,
-            y:
-              ((point.y - (imageBoundaries.top - viewportTop)) /
-                imageBoundaries.height) *
-              originalImage.height,
-          }));
+          case "circle":
+            // Type cast to fabric.Circle to access radius property
+            const circleObj = obj as fabric.Circle;
+            const radius = Math.round((circleObj.radius || 0) * scaleRatioX);
 
-          newObj = new fabric.Polygon(scaledPoints, {
-            fill: obj.fill,
-            stroke: obj.stroke,
-            strokeWidth: (obj.strokeWidth || 1) * scaleRatioX,
-          });
-        } else if (obj instanceof fabric.Textbox) {
-          // For text, scale font size and position
-          newObj = new fabric.Textbox(obj.text || "", {
-            left: targetX,
-            top: targetY,
-            fontSize: (obj.fontSize || 20) * scaleRatioX,
-            fill: obj.fill,
-            fontFamily: obj.fontFamily,
-          });
+            processedImage = await drawingService.drawCircle(
+              processedImage,
+              scaledLeft,
+              scaledTop,
+              radius,
+              strokeColor as string,
+              fillColor,
+              strokeWidth as number
+            );
+            break;
+
+          case "polygon":
+            if ("points" in obj && obj.points) {
+              // Type cast to fabric.Polygon
+              const polygonObj = obj as fabric.Polygon;
+
+              // Convert points to backend format
+              const points = (
+                polygonObj.points as { x: number; y: number }[]
+              ).map((p) => {
+                // Calculate absolute position of each point
+                const absoluteX = p.x + left;
+                const absoluteY = p.y + top;
+
+                // Calculate position relative to image
+                const relX = absoluteX - imageLeft;
+                const relY = absoluteY - imageTop;
+
+                // Scale to actual image size
+                const x = Math.round(relX * scaleRatioX);
+                const y = Math.round(relY * scaleRatioY);
+
+                return [x, y];
+              });
+
+              processedImage = await drawingService.drawPolygon(
+                processedImage,
+                points,
+                strokeColor as string,
+                fillColor,
+                strokeWidth as number
+              );
+            }
+            break;
+
+          case "textbox":
+          case "i-text":
+            if ("text" in obj) {
+              // Type cast to fabric.Textbox or fabric.IText
+              const textObj = obj as fabric.Textbox | fabric.IText;
+              const text = (textObj.text as string) || "";
+              const fontSize = (textObj.fontSize || 20) as number;
+
+              processedImage = await drawingService.addText(
+                processedImage,
+                text,
+                scaledLeft,
+                scaledTop,
+                fontSize,
+                fillColor || (strokeColor as string),
+                strokeWidth as number
+              );
+            }
+            break;
         }
-
-        // Add the new object to the export canvas
-        if (newObj) {
-          exportCanvas.add(newObj);
-        }
-      });
-
-      // Render all objects in the export canvas
-      exportCanvas.renderAll();
-
-      // Draw the export canvas on top of the original image
-      tempCtx.drawImage(exportCanvas.getElement(), 0, 0);
-
-      // Get final composed image
-      const composedDataUrl = tempCanvas.toDataURL("image/png", 1.0);
-
-      // Clean up resources
-      try {
-        exportCanvas.dispose();
-      } catch (e) {
-        console.error("Error disposing export canvas:", e);
       }
 
-      console.log("Drawing saved with proper positioning and scaling");
-      onResult(composedDataUrl, imageDataUrl);
-    };
-
-    originalImage.src = imageDataUrl;
+      console.log("Drawing saved using backend API");
+      onResult(processedImage, imageDataUrl);
+      return processedImage;
+    } catch (error) {
+      console.error("Error saving canvas image:", error);
+    }
   }, [imageDataUrl, onResult, getImageBoundaries]);
 
   const saveAndClose = useCallback(() => {
