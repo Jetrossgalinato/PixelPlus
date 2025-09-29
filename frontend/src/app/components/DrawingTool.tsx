@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Pencil, Square, Circle, Type, Move, Trash2 } from "lucide-react";
+import { Pencil, Square, Circle, Type, Trash2 } from "lucide-react";
 import * as fabric from "fabric";
 import * as drawingService from "../services/drawingService";
 
@@ -1039,17 +1039,6 @@ export default function DrawingTool({
         title="Add Text"
       >
         <Type className="w-5 h-5" />
-      </button>
-      <button
-        onClick={() => handleShapeSelect("move")}
-        className={`p-2 rounded-md ${
-          activeShape === "move"
-            ? "bg-blue-500 text-white"
-            : "bg-gray-700 text-gray-200 hover:bg-gray-600"
-        }`}
-        title="Select and Move Objects"
-      >
-        <Move className="w-5 h-5" />
       </button>
 
       {/* Divider */}
