@@ -24,12 +24,14 @@ type DrawingToolProps = {
   onResult: (url: string, originalForUndo?: string) => void;
   disabled?: boolean;
   className?: string;
+  onDrawingChange?: (isDrawing: boolean) => void;
 };
 
 export default function DrawingTool({
   imageDataUrl,
   onResult,
   disabled = false,
+  onDrawingChange,
 }: DrawingToolProps) {
   // === State definitions ===
   const [showToolbar, setShowToolbar] = useState(false);
@@ -593,6 +595,9 @@ export default function DrawingTool({
   const handleDrawingButtonClick = useCallback(() => {
     const newShowToolbar = !showToolbar;
     setShowToolbar(newShowToolbar);
+    if (onDrawingChange) {
+      onDrawingChange(newShowToolbar);
+    }
 
     // When opening toolbar, set default tool if none selected
     if (newShowToolbar && !activeShape) {
@@ -604,7 +609,7 @@ export default function DrawingTool({
       setShowColorPicker(false);
       setShowSettings(false);
     }
-  }, [showToolbar, activeShape]);
+  }, [showToolbar, activeShape, onDrawingChange]);
 
   const handleShapeSelect = useCallback(
     (shape: string) => {

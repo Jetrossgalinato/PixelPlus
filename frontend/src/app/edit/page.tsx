@@ -18,6 +18,7 @@ export default function EditPage() {
   const [processing] = useState(false); // retained for future multi-tool orchestration
   // Track which slider modal is open: "hsv", "rgb", or null
   const [openSlider, setOpenSlider] = useState<null | "hsv" | "rgb">(null);
+  const [isDrawing, setIsDrawing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const prevResultUrl = useRef<string | null>(null);
   // Track when undo button is clicked, to ensure sliders are always closed
@@ -409,6 +410,7 @@ export default function EditPage() {
               imageDataUrl={result || image.dataUrl}
               onResult={handleEditResult}
               disabled={processing || !(result || image.dataUrl)}
+              onDrawingChange={setIsDrawing}
             />
           </div>
           {/* Divider */}
@@ -421,7 +423,7 @@ export default function EditPage() {
       <main className="flex-1 flex flex-col items-center px-8 py-8">
         {/* HSV slider popout anchor - positioned outside sidebar */}
         {/* HSV slider popout anchor - positioned outside sidebar */}
-        {openSlider !== "rgb" && (
+        {!isDrawing && openSlider !== "rgb" && (
           <div
             id="hsv-slider-popout-anchor"
             className="absolute left-44 z-20"
@@ -429,7 +431,7 @@ export default function EditPage() {
           ></div>
         )}
         {/* RGB slider popout anchor - positioned outside sidebar */}
-        {openSlider !== "hsv" && (
+        {!isDrawing && openSlider !== "hsv" && (
           <div
             id="rgb-slider-popout-anchor"
             className="absolute left-44 z-10"
