@@ -233,7 +233,7 @@ def add_text(
     text: str = Body(...),
     x: int = Body(...),
     y: int = Body(...),
-    font_scale: float = Body(1.0),
+    font_size: int = Body(20),
     color: str = Body("#000000"),
     thickness: int = Body(2),
     font_face: int = Body(cv2.FONT_HERSHEY_SIMPLEX)
@@ -244,8 +244,20 @@ def add_text(
     # Parse color using helper function
     bgr_color = parse_color(color)
     
+    # Adjust font scale based on font size for better accuracy
+    font_scale = font_size / 10.0  # Adjust this ratio as needed
+    
+    # Adjust thickness based on font size for better visibility
+    adjusted_thickness = max(1, thickness * (font_size // 5))
+
+    # Get text size to adjust position
+    (text_width, text_height), baseline = cv2.getTextSize(text, font_face, font_scale, adjusted_thickness)
+    
+    # Adjust y-coordinate to be the bottom-left corner
+    adjusted_y = y + text_height
+    
     # Add text to the image
-    cv2.putText(img, text, (x, y), font_face, font_scale, bgr_color, thickness)
+    cv2.putText(img, text, (x, adjusted_y), font_face, font_scale, bgr_color, adjusted_thickness)
     
     # Return the modified image
     return {"image": image_to_base64(img)}
