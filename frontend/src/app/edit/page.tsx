@@ -350,6 +350,8 @@ export default function EditPage() {
               onResult={handleEditResult}
               disabled={processing || !(result || image.dataUrl)}
               onOpenChange={(open) => setActiveModal(open ? "color" : null)}
+              hsvValues={hsvSlider}
+              rgbValues={rgbSlider}
             />
           </div>
           {/* Divider */}

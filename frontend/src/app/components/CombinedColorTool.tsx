@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { SlidersHorizontal, Wand2 } from "lucide-react";
 
@@ -15,6 +15,10 @@ type CombinedColorToolProps = {
   ) => void;
   disabled?: boolean;
   onOpenChange?: (open: boolean) => void;
+  // Optional externally controlled values so parent (edit page) can
+  // synchronize the modal sliders (e.g., on Undo)
+  hsvValues?: { h: number; s: number; v: number };
+  rgbValues?: { r: number; g: number; b: number };
 };
 
 export default function CombinedColorTool({
@@ -23,6 +27,8 @@ export default function CombinedColorTool({
   onResult,
   disabled,
   onOpenChange,
+  hsvValues,
+  rgbValues,
 }: CombinedColorToolProps) {
   const [show, setShow] = useState(false);
 
@@ -303,6 +309,26 @@ export default function CombinedColorTool({
       </div>
     </div>
   );
+
+  // Keep internal slider UI in sync with external values from parent (Undo)
+  // Important: Do NOT call applyHSV/applyRGB here; we only sync the UI.
+  useEffect(() => {
+    if (hsvValues) {
+      const { h: nh, s: ns, v: nv } = hsvValues;
+      setH(nh);
+      setS(ns);
+      setV(nv);
+    }
+  }, [hsvValues]);
+
+  useEffect(() => {
+    if (rgbValues) {
+      const { r: nr, g: ng, b: nb } = rgbValues;
+      setR(nr);
+      setG(ng);
+      setB(nb);
+    }
+  }, [rgbValues]);
 
   return (
     <div>
