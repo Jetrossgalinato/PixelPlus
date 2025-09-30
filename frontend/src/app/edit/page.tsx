@@ -443,27 +443,51 @@ export default function EditPage() {
       </aside>
       {/* Main content area shifted right */}
       <main className="flex-1 flex flex-col items-center px-8 py-8">
-        {/* HSV slider popout anchor - positioned outside sidebar */}
-        {/* HSV slider popout anchor - positioned outside sidebar */}
-        {!isDrawing && openSlider !== "rgb" && (
-          <div
-            id="hsv-slider-popout-anchor"
-            className="absolute left-44 z-20"
-            style={{ top: "250px", minWidth: "250px", minHeight: "150px" }}
-          ></div>
-        )}
-        {/* RGB slider popout anchor - positioned outside sidebar */}
-        {!isDrawing && openSlider !== "hsv" && (
-          <div
-            id="rgb-slider-popout-anchor"
-            className="absolute left-44 z-10"
-            style={{
-              top: "350px",
-              minWidth: "250px",
-              minHeight: "150px",
-              zIndex: 10,
-            }}
-          ></div>
+        {/* All tool modal anchors - positioned on the right side */}
+        {!isDrawing && (
+          <>
+            {/* HSV slider popout anchor */}
+            {openSlider !== "rgb" && (
+              <div
+                id="hsv-slider-popout-anchor"
+                className="absolute right-8 z-20"
+                style={{ top: "150px", minWidth: "350px", minHeight: "180px" }}
+              ></div>
+            )}
+            {/* RGB slider popout anchor */}
+            {openSlider !== "hsv" && (
+              <div
+                id="rgb-slider-popout-anchor"
+                className="absolute right-8 z-10"
+                style={{
+                  top: "150px",
+                  minWidth: "350px",
+                  minHeight: "180px",
+                  zIndex: 10,
+                }}
+              ></div>
+            )}
+            {/* Translation modal anchor */}
+            <div
+              id="translation-modal-anchor"
+              className="absolute right-8 z-30"
+              style={{
+                top: "150px",
+                minWidth: "350px",
+                minHeight: "180px",
+              }}
+            ></div>
+            {/* Rotation modal anchor */}
+            <div
+              id="rotation-modal-anchor"
+              className="absolute right-8 z-30"
+              style={{
+                top: "150px",
+                minWidth: "350px",
+                minHeight: "180px",
+              }}
+            ></div>
+          </>
         )}
         {/* Undo and Export buttons at top corners */}
         <div className="w-full flex justify-between items-start mb-2">
