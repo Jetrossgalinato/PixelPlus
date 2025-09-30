@@ -348,8 +348,8 @@ export default function EditPage() {
   return (
     <div className="min-h-screen flex flex-row bg-gradient-to-br from-gray-50 to-gray-200 dark:from-gray-900 dark:to-gray-800 relative">
       <aside
-        className="h-screen w-45 min-w-[200px] bg-white/70 dark:bg-gray-900/70 border-r border-gray-200 dark:border-gray-800 flex flex-col items-start py-8 gap-0 shadow-xl z-10 relative backdrop-blur-md"
-        style={{ boxShadow: "0 4px 32px 0 rgba(0,0,0,0.10)" }}
+        className="fixed top-0 left-0 h-screen w-[260px] min-w-[260px] bg-white/70 dark:bg-gray-900/70 border-r border-gray-200 dark:border-gray-800 flex flex-col items-start py-8 gap-0 shadow-xl z-10 backdrop-blur-md"
+        style={{ boxShadow: "0 4px 32px 0 rgba(0,0,0,0.10)", height: "100vh" }}
       >
         {/* Back button at very top, left-aligned */}
         <button
@@ -458,7 +458,10 @@ export default function EditPage() {
         <div className="flex-1" />
       </aside>
       {/* Main content area shifted right */}
-      <main className="flex-1 flex flex-col items-center px-8 py-8">
+      <main
+        className="flex-1 flex flex-col items-center px-8 py-8"
+        style={{ marginLeft: 260 }}
+      >
         {/* All tool modal anchors - positioned on the right side (always present) */}
         <>
           {/* HSV slider popout anchor */}
