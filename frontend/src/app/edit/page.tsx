@@ -459,7 +459,7 @@ export default function EditPage() {
           {/* Combined Color modal anchor */}
           <div
             id="color-modal-anchor"
-            className={`absolute z-20 ${
+            className={`absolute z-[110] ${
               isDrawing ? "pointer-events-none" : ""
             }`}
             style={{
@@ -474,7 +474,7 @@ export default function EditPage() {
           {/* Translation modal anchor */}
           <div
             id="translation-modal-anchor"
-            className={`absolute right-8 z-30 ${
+            className={`absolute right-8 z-[110] ${
               isDrawing ? "pointer-events-none" : ""
             }`}
             style={{
@@ -490,7 +490,7 @@ export default function EditPage() {
           {/* Rotation modal anchor */}
           <div
             id="rotation-modal-anchor"
-            className={`absolute right-8 z-30 ${
+            className={`absolute right-8 z-[110] ${
               isDrawing ? "pointer-events-none" : ""
             }`}
             style={{

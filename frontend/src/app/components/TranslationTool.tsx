@@ -175,12 +175,12 @@ export default function TranslationTool({
       {showModal && (
         <>
           {/* Backdrop for closing modal when clicking outside */}
-          <div className="fixed inset-0 z-[90]" onClick={closeModal} />
+          <div className="fixed inset-0 z-[100]" onClick={closeModal} />
 
           {typeof window !== "undefined" &&
             document.getElementById("translation-modal-anchor") &&
             ReactDOM.createPortal(
-              modalContent,
+              <div className="z-[120] relative">{modalContent}</div>,
               document.getElementById("translation-modal-anchor") as HTMLElement
             )}
         </>

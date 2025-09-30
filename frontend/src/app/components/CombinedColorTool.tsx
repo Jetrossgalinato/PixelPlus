@@ -344,11 +344,11 @@ export default function CombinedColorTool({
       </button>
       {show && (
         <>
-          <div className="fixed inset-0 z-[90]" onClick={closeModal} />
+          <div className="fixed inset-0 z-[100]" onClick={closeModal} />
           {typeof window !== "undefined" &&
           document.getElementById("color-modal-anchor")
             ? ReactDOM.createPortal(
-                modal,
+                <div className="z-[120] relative">{modal}</div>,
                 document.getElementById("color-modal-anchor") as HTMLElement
               )
             : null}

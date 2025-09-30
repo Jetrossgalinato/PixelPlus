@@ -101,12 +101,12 @@ export default function RotationTool({
       {showModal && (
         <>
           {/* Backdrop for closing modal when clicking outside */}
-          <div className="fixed inset-0 z-[90]" onClick={closeModal} />
+          <div className="fixed inset-0 z-[100]" onClick={closeModal} />
 
           {typeof window !== "undefined" &&
           document.getElementById("rotation-modal-anchor")
             ? ReactDOM.createPortal(
-                <div className="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-700 min-w-[320px] w-[350px] relative">
+                <div className="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-700 min-w-[320px] w-[350px] relative z-[120]">
                   <button
                     className="absolute top-2 right-3 text-gray-400 hover:text-white text-xl font-bold"
                     onClick={closeModal}
