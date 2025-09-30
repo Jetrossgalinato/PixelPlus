@@ -1,13 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { rotateImage, transformRotate } from "../services/rotationService";
 import { RotateCw } from "lucide-react";
 import ReactDOM from "react-dom";
 
 interface RotationToolProps {
   imageDataUrl: string | null;
-  onResult: (url: string, originalForUndo?: string) => void;
+  onResult: (
+    url: string,
+    originalForUndo?: string,
+    sliderValues?:
+      | { type: "rotation"; values: { angle: number } }
+      | { type: "rotation-transform"; values: { op: string } }
+  ) => void;
   disabled?: boolean;
   onOpenChange?: (open: boolean) => void;
+  // Externally controlled values so parent can sync UI (e.g., on Undo)
+  rotationValues?: { angle: number };
 }
 
 export default function RotationTool({
@@ -15,6 +23,7 @@ export default function RotationTool({
   onResult,
   disabled = false,
   onOpenChange,
+  rotationValues,
 }: RotationToolProps) {
   const [angle, setAngle] = useState<number>(0);
   const [loading, setLoading] = useState(false);
@@ -30,7 +39,7 @@ export default function RotationTool({
     setLoading(true);
     try {
       const result = await rotateImage(imageDataUrl, angle);
-      onResult(result, imageDataUrl);
+      onResult(result, imageDataUrl, { type: "rotation", values: { angle } });
       closeModal();
     } catch (error) {
       console.error("Rotation failed:", error);
@@ -53,7 +62,10 @@ export default function RotationTool({
     setLoading(true);
     try {
       const result = await transformRotate(imageDataUrl, op);
-      onResult(result, imageDataUrl);
+      onResult(result, imageDataUrl, {
+        type: "rotation-transform",
+        values: { op },
+      });
       closeModal();
     } catch (error) {
       console.error("Transform failed:", error);
@@ -61,6 +73,13 @@ export default function RotationTool({
       setLoading(false);
     }
   };
+
+  // Sync internal angle input from external value (e.g., Undo)
+  useEffect(() => {
+    if (rotationValues) {
+      setAngle(rotationValues.angle);
+    }
+  }, [rotationValues]);
 
   return (
     <div className="relative">

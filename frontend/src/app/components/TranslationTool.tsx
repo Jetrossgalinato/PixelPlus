@@ -1,13 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { translateImage } from "../services/translationService";
 import { Move } from "lucide-react";
 import ReactDOM from "react-dom";
 
 interface TranslationToolProps {
   imageDataUrl: string | null;
-  onResult: (url: string, originalForUndo?: string) => void;
+  onResult: (
+    url: string,
+    originalForUndo?: string,
+    sliderValues?: { type: "translation"; values: { x: number; y: number } }
+  ) => void;
   disabled?: boolean;
   onOpenChange?: (open: boolean) => void;
+  // Externally controlled values so parent can sync UI (e.g., on Undo)
+  translationValues?: { x: number; y: number };
 }
 
 export default function TranslationTool({
@@ -15,6 +21,7 @@ export default function TranslationTool({
   onResult,
   disabled = false,
   onOpenChange,
+  translationValues,
 }: TranslationToolProps) {
   const [shiftX, setShiftX] = useState<number>(0);
   const [shiftY, setShiftY] = useState<number>(0);
@@ -31,7 +38,10 @@ export default function TranslationTool({
     setLoading(true);
     try {
       const result = await translateImage(imageDataUrl, shiftX, shiftY);
-      onResult(result, imageDataUrl);
+      onResult(result, imageDataUrl, {
+        type: "translation",
+        values: { x: shiftX, y: shiftY },
+      });
       closeModal();
     } catch (error) {
       console.error("Translation failed:", error);
@@ -39,6 +49,14 @@ export default function TranslationTool({
       setLoading(false);
     }
   };
+
+  // Sync internal state from external values (e.g., Undo)
+  useEffect(() => {
+    if (translationValues) {
+      setShiftX(translationValues.x);
+      setShiftY(translationValues.y);
+    }
+  }, [translationValues]);
   const modalContent = (
     <div className="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-700 min-w-[320px] w-[350px] relative">
       <button

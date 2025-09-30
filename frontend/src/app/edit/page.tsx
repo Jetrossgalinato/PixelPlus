@@ -30,15 +30,34 @@ export default function EditPage() {
       url: string;
       hsv: { h: number; s: number; v: number };
       rgb?: { r: number; g: number; b: number };
-      lastTool?: "hsv" | "rgb"; // Track which tool was last used
+      lastTool?:
+        | "hsv"
+        | "rgb"
+        | "translation"
+        | "rotation"
+        | "rotation-transform"; // Track which tool was last used
     }[]
   >([]); // For resetting to original
+  const [translationVals, setTranslationVals] = useState<{
+    x: number;
+    y: number;
+  }>({ x: 0, y: 0 });
+  const [rotationVal, setRotationVal] = useState<{ angle: number }>({
+    angle: 0,
+  });
   const [editHistory, setEditHistory] = useState<
     {
       url: string;
       hsv: { h: number; s: number; v: number };
       rgb?: { r: number; g: number; b: number };
-      lastTool?: "hsv" | "rgb"; // Track which tool was last used
+      translation?: { x: number; y: number };
+      rotation?: { angle: number } | { op: string };
+      lastTool?:
+        | "hsv"
+        | "rgb"
+        | "translation"
+        | "rotation"
+        | "rotation-transform"; // Track which tool was last used
     }[]
   >([]); // For step-by-step undo
   // Keep last-applied HSV/RGB values for history (optional)
@@ -71,10 +90,13 @@ export default function EditPage() {
       url: string,
       originalForUndo?: string,
       sliderValues?: {
-        type: "hsv" | "rgb";
+        type: "hsv" | "rgb" | "translation" | "rotation" | "rotation-transform";
         values:
           | { h: number; s: number; v: number }
-          | { r: number; g: number; b: number };
+          | { r: number; g: number; b: number }
+          | { x: number; y: number }
+          | { angle: number }
+          | { op: string };
       }
     ) => {
       // Debug information
@@ -101,6 +123,10 @@ export default function EditPage() {
             url: result,
             hsv: hsvSlider,
             rgb: rgbSlider,
+            translation: translationVals,
+            // If last tool was rotation with transform op, we store as-is; angle is meaningful for typed rotation
+            rotation:
+              sliderValues?.type === "rotation" ? rotationVal : undefined,
             lastTool: currentTool, // Track which tool was used
           },
         ]);
@@ -129,12 +155,16 @@ export default function EditPage() {
           setRgbSlider(
             sliderValues.values as { r: number; g: number; b: number }
           );
+        } else if (sliderValues.type === "translation") {
+          setTranslationVals(sliderValues.values as { x: number; y: number });
+        } else if (sliderValues.type === "rotation") {
+          setRotationVal(sliderValues.values as { angle: number });
         }
       }
 
       setResult(url);
     },
-    [result, hsvSlider, rgbSlider]
+    [result, hsvSlider, rgbSlider, translationVals, rotationVal]
   );
 
   // Back to default (original) handler
@@ -149,11 +179,15 @@ export default function EditPage() {
       } else {
         setRgbSlider({ r: 1, g: 1, b: 1 });
       }
+      setTranslationVals({ x: 0, y: 0 });
+      setRotationVal({ angle: 0 });
       setUndoStack([]);
     } else if (image.dataUrl) {
       setResult(null); // will show original placeholder
       setHsvSlider({ h: 0, s: 1, v: 1 });
       setRgbSlider({ r: 1, g: 1, b: 1 });
+      setTranslationVals({ x: 0, y: 0 });
+      setRotationVal({ angle: 0 });
     }
     setEditHistory([]);
     setActiveModal(null);
@@ -210,6 +244,16 @@ export default function EditPage() {
           if (previousState.rgb) {
             setRgbSlider(previousState.rgb);
           }
+          if (previousState.translation) {
+            setTranslationVals(previousState.translation);
+          } else {
+            setTranslationVals({ x: 0, y: 0 });
+          }
+          if (previousState.rotation && "angle" in previousState.rotation) {
+            setRotationVal(previousState.rotation as { angle: number });
+          } else {
+            setRotationVal({ angle: 0 });
+          }
 
           // Close any open modals to avoid interfering with future undos
           setActiveModal(null);
@@ -224,10 +268,14 @@ export default function EditPage() {
             if (undoStack[0].rgb) {
               setRgbSlider(undoStack[0].rgb);
             }
+            setTranslationVals({ x: 0, y: 0 });
+            setRotationVal({ angle: 0 });
           } else {
             setResult(image.dataUrl);
             setHsvSlider({ h: 0, s: 1, v: 1 });
             setRgbSlider({ r: 1, g: 1, b: 1 });
+            setTranslationVals({ x: 0, y: 0 });
+            setRotationVal({ angle: 0 });
           }
           // No UI resets needed here; combined modal manages internal state
         }
@@ -237,12 +285,16 @@ export default function EditPage() {
         if (undoStack[0].rgb) {
           setRgbSlider(undoStack[0].rgb);
         }
+        setTranslationVals({ x: 0, y: 0 });
+        setRotationVal({ angle: 0 });
         // Close any open modals
         setActiveModal(null);
       } else {
         setResult(null);
         setHsvSlider({ h: 0, s: 1, v: 1 });
         setRgbSlider({ r: 1, g: 1, b: 1 });
+        setTranslationVals({ x: 0, y: 0 });
+        setRotationVal({ angle: 0 });
         // Close any open modals
         setActiveModal(null);
       }
@@ -376,6 +428,7 @@ export default function EditPage() {
               onOpenChange={(open) =>
                 setActiveModal(open ? "translation" : null)
               }
+              translationValues={translationVals}
             />
           </div>
           {/* Divider */}
@@ -387,6 +440,7 @@ export default function EditPage() {
               onResult={handleEditResult}
               disabled={processing || !(result || image.dataUrl)}
               onOpenChange={(open) => setActiveModal(open ? "rotation" : null)}
+              rotationValues={rotationVal}
             />
           </div>
           {/* Divider */}
