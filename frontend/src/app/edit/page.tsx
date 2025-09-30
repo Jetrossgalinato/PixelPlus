@@ -6,9 +6,7 @@ import UndoButton from "../components/UndoButton";
 import ExportButton from "../components/ExportButton";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
-import GrayscaleTool from "../components/GrayscaleTool";
-import RGBTool from "../components/RGBTool";
-import HSVTool from "../components/HSVTool";
+import CombinedColorTool from "../components/CombinedColorTool";
 import DrawingTool from "../components/DrawingTool";
 import TranslationTool from "../components/TranslationTool";
 import RotationTool from "../components/RotationTool";
@@ -18,8 +16,7 @@ export default function EditPage() {
   const router = useRouter();
   const { image } = useImage();
   const [processing] = useState(false); // retained for future multi-tool orchestration
-  // Track which slider modal is open: "hsv", "rgb", or null
-  const [openSlider, setOpenSlider] = useState<null | "hsv" | "rgb">(null);
+  // Legacy slider state removed; combined tool manages its own modal
   const [isDrawing, setIsDrawing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const prevResultUrl = useRef<string | null>(null);
@@ -44,20 +41,13 @@ export default function EditPage() {
       lastTool?: "hsv" | "rgb"; // Track which tool was last used
     }[]
   >([]); // For step-by-step undo
-  const [hsvSlider, setHsvSlider] = useState<{
-    h: number;
-    s: number;
-    v: number;
-  }>({ h: 0, s: 1, v: 1 });
-  const [rgbSlider, setRgbSlider] = useState<{
-    r: number;
-    g: number;
-    b: number;
-  }>({ r: 1, g: 1, b: 1 });
+  // Keep last-applied HSV/RGB values for history (optional)
+  const [hsvSlider, setHsvSlider] = useState({ h: 0, s: 1, v: 1 });
+  const [rgbSlider, setRgbSlider] = useState({ r: 1, g: 1, b: 1 });
 
   // Track active modal to hide other anchors
   const [activeModal, setActiveModal] = useState<
-    null | "hsv" | "rgb" | "translation" | "rotation"
+    null | "color" | "hsv" | "rgb" | "translation" | "rotation"
   >(null);
 
   // Restore edit preview from localStorage on mount
@@ -73,8 +63,7 @@ export default function EditPage() {
   const [error] = useState<string | null>(null);
 
   // For resetting RGB sliders on Undo
-  const [rgbResetSignal, setRgbResetSignal] = useState(0);
-  const [hsvResetSignal, setHsvResetSignal] = useState(0);
+  // Removed individual tool reset signals (managed by combined modal)
 
   // Receive grayscale or RGB/HSV result from tool component
   const handleEditResult = useCallback(
@@ -150,9 +139,7 @@ export default function EditPage() {
 
   // Back to default (original) handler
   const handleBackToDefault = useCallback(() => {
-    setRgbResetSignal((s) => s + 1); // trigger RGBTool slider reset
-    setHsvResetSignal((s) => s + 1); // trigger HSVTool slider reset
-    setOpenSlider(null); // Close any open sliders
+    // Close any open modals
 
     if (undoStack.length > 0) {
       setResult(undoStack[0].url);
@@ -182,8 +169,7 @@ export default function EditPage() {
       const newHistory = [...editHistory];
       const previousState = newHistory.pop();
 
-      // Always close any open sliders before proceeding with the undo
-      setOpenSlider(null);
+      // Always close any open modals before proceeding with the undo
       setActiveModal(null);
 
       setEditHistory(newHistory);
@@ -225,12 +211,7 @@ export default function EditPage() {
             setRgbSlider(previousState.rgb);
           }
 
-          // Reset both slider types - but don't automatically open any slider modals
-          setRgbResetSignal((s) => s + 1);
-          setHsvResetSignal((s) => s + 1);
-
-          // Close any open sliders to avoid interfering with future undos
-          setOpenSlider(null);
+          // Close any open modals to avoid interfering with future undos
           setActiveModal(null);
         } else {
           // Fallback to original image if URL is invalid
@@ -248,9 +229,7 @@ export default function EditPage() {
             setHsvSlider({ h: 0, s: 1, v: 1 });
             setRgbSlider({ r: 1, g: 1, b: 1 });
           }
-          // Reset both slider types
-          setHsvResetSignal((s) => s + 1);
-          setRgbResetSignal((s) => s + 1);
+          // No UI resets needed here; combined modal manages internal state
         }
       } else if (undoStack.length > 0) {
         setResult(undoStack[0].url);
@@ -258,17 +237,13 @@ export default function EditPage() {
         if (undoStack[0].rgb) {
           setRgbSlider(undoStack[0].rgb);
         }
-        setHsvResetSignal((s) => s + 1);
-        setRgbResetSignal((s) => s + 1);
-        setOpenSlider(null); // Close any open sliders
+        // Close any open modals
         setActiveModal(null);
       } else {
         setResult(null);
         setHsvSlider({ h: 0, s: 1, v: 1 });
         setRgbSlider({ r: 1, g: 1, b: 1 });
-        setHsvResetSignal((s) => s + 1);
-        setRgbResetSignal((s) => s + 1);
-        setOpenSlider(null); // Close any open sliders
+        // Close any open modals
         setActiveModal(null);
       }
     } else if (result) {
@@ -284,7 +259,6 @@ export default function EditPage() {
 
     // If this was triggered by an undo action, ensure sliders are closed
     if (isUndoClicked.current) {
-      setOpenSlider(null);
       isUndoClicked.current = false;
     }
   }, [result]);
@@ -368,52 +342,14 @@ export default function EditPage() {
         </div>
         {/* Tools, all left-aligned */}
         <div className="w-full flex flex-col items-start gap-3 px-4">
-          {/* Grayscale Tool Button */}
+          {/* Combined Color Tool Button (HSV + RGB + Grayscale) */}
           <div className="w-full flex flex-col items-start">
-            <GrayscaleTool
+            <CombinedColorTool
+              imageDataUrl={result || image.dataUrl}
               imageFile={image.file}
-              originalDataUrl={image.dataUrl}
-              onResult={handleEditResult}
-              disabled={processing}
-            />
-          </div>
-          {/* Divider */}
-          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
-          {/* HSV Tool Button */}
-          <div className="w-full flex flex-col items-start">
-            <HSVTool
-              imageDataUrl={result || image.dataUrl}
               onResult={handleEditResult}
               disabled={processing || !(result || image.dataUrl)}
-              resetSlidersSignal={{
-                counter: hsvResetSignal,
-                values: hsvSlider,
-              }}
-              layout="horizontal"
-              popoutSliders={true}
-              showSliders={openSlider === "hsv"}
-              setShowSliders={(show: boolean) => {
-                setOpenSlider(show ? "hsv" : null);
-                setActiveModal(show ? "hsv" : null);
-              }}
-            />
-          </div>
-          {/* Divider */}
-          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
-          {/* RGB Tool Button */}
-          <div className="w-full flex flex-col items-start">
-            <RGBTool
-              imageDataUrl={result || image.dataUrl}
-              onResult={handleEditResult}
-              disabled={processing || !(result || image.dataUrl)}
-              resetSlidersSignal={rgbResetSignal}
-              layout="horizontal"
-              popoutSliders={true}
-              showSliders={openSlider === "rgb"}
-              setShowSliders={(show: boolean) => {
-                setOpenSlider(show ? "rgb" : null);
-                setActiveModal(show ? "rgb" : null);
-              }}
+              onOpenChange={(open) => setActiveModal(open ? "color" : null)}
             />
           </div>
           {/* Divider */}
@@ -464,33 +400,19 @@ export default function EditPage() {
       >
         {/* All tool modal anchors - positioned on the right side (always present) */}
         <>
-          {/* HSV slider popout anchor */}
+          {/* Combined Color modal anchor */}
           <div
-            id="hsv-slider-popout-anchor"
-            className={`absolute right-8 z-20 ${
+            id="color-modal-anchor"
+            className={`absolute z-20 ${
               isDrawing ? "pointer-events-none" : ""
             }`}
             style={{
+              right: "32px", // move modal further right (was right-8 = 2rem)
               top: "150px",
-              minWidth: "350px",
+              minWidth: "380px",
               minHeight: "180px",
               display:
-                activeModal && activeModal !== "hsv" ? "none" : undefined,
-            }}
-          ></div>
-          {/* RGB slider popout anchor */}
-          <div
-            id="rgb-slider-popout-anchor"
-            className={`absolute right-8 ${
-              isDrawing ? "pointer-events-none" : ""
-            }`}
-            style={{
-              top: "150px",
-              minWidth: "350px",
-              minHeight: "180px",
-              zIndex: 10,
-              display:
-                activeModal && activeModal !== "rgb" ? "none" : undefined,
+                activeModal && activeModal !== "color" ? "none" : undefined,
             }}
           ></div>
           {/* Translation modal anchor */}
