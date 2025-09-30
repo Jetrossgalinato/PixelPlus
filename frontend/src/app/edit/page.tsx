@@ -367,7 +367,7 @@ export default function EditPage() {
           </span>
         </div>
         {/* Tools, all left-aligned */}
-        <div className="w-full flex flex-col items-start gap-4 px-4">
+        <div className="w-full flex flex-col items-start gap-3 px-4">
           {/* Grayscale Tool Button */}
           <div className="w-full flex flex-col items-start">
             <GrayscaleTool
