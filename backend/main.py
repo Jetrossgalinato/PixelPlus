@@ -5,6 +5,7 @@ from api_rgb import router as rgb_router
 from api_hsv import router as hsv_router
 from api_drawing import router as drawing_router
 from api_translation import router as translation_router
+from api_rotation import router as rotation_router
     
 app = FastAPI()
 
@@ -25,6 +26,7 @@ app.include_router(grayscale_router)
 app.include_router(hsv_router)
 app.include_router(drawing_router)
 app.include_router(translation_router)
+app.include_router(rotation_router)
 
 @app.get("/")
 def read_root():
