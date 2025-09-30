@@ -70,3 +70,49 @@ def rotate_image(
         error_message = f"Error rotating image: {str(e)}"
         print(error_message)
         return {"error": error_message}
+
+
+@router.post("/rotation/transform")
+def rotate_transform(
+    image: str = Body(...),
+    operation: str = Body(..., embed=True),
+):
+    """
+    Apply fast orientation transforms using cv2.transpose and cv2.flip.
+
+    Supported operations:
+    - "transpose": cv2.transpose (swap axes)
+    - "flip0": flip vertically (flipCode=0)
+    - "flip1": flip horizontally (flipCode=1)
+    - "flip-1": flip both axes (flipCode=-1)
+    - "cw90": rotate 90 degrees clockwise using transpose + horizontal flip
+    - "ccw90": rotate 90 degrees counter-clockwise using transpose + vertical flip
+    - "rotate180": rotate 180 degrees (flip both axes)
+    """
+    try:
+        img = base64_to_image(image)
+        if img is None or img.size == 0:
+            return {"error": "Failed to decode input image"}
+
+        if operation == "transpose":
+            out = cv2.transpose(img)
+        elif operation == "flip0":
+            out = cv2.flip(img, 0)
+        elif operation == "flip1":
+            out = cv2.flip(img, 1)
+        elif operation == "flip-1":
+            out = cv2.flip(img, -1)
+        elif operation == "cw90":
+            out = cv2.flip(cv2.transpose(img), 1)
+        elif operation == "ccw90":
+            out = cv2.flip(cv2.transpose(img), 0)
+        elif operation == "rotate180":
+            out = cv2.flip(img, -1)
+        else:
+            return {"error": f"Unsupported operation: {operation}"}
+
+        return {"image": image_to_base64(out)}
+    except Exception as e:
+        error_message = f"Error applying transform: {str(e)}"
+        print(error_message)
+        return {"error": error_message}

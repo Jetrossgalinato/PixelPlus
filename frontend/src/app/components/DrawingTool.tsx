@@ -551,7 +551,12 @@ export default function DrawingTool({
   const saveAndClose = useCallback(() => {
     saveCanvasImage();
     setActiveShape(null);
-  }, [saveCanvasImage]);
+    // Close the toolbar and re-enable interactions in parent
+    setShowToolbar(false);
+    if (onDrawingChange) {
+      onDrawingChange(false);
+    }
+  }, [saveCanvasImage, onDrawingChange]);
 
   // Handle click outside toolbar and image
   const handleClickOutside = useCallback(
@@ -585,10 +590,20 @@ export default function DrawingTool({
         }
         // Close toolbar when clicking outside image
         setShowToolbar(false);
+        // Notify parent to re-enable modal interactions
+        if (onDrawingChange) {
+          onDrawingChange(false);
+        }
       }
       // If clicked inside image, keep drawing tools open
     },
-    [activeShape, saveCanvasImage, isPointInImage, cleanupUnfinishedPolygon]
+    [
+      activeShape,
+      saveCanvasImage,
+      isPointInImage,
+      cleanupUnfinishedPolygon,
+      onDrawingChange,
+    ]
   );
 
   // Tool button handlers

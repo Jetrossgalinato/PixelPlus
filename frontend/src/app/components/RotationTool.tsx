@@ -1,30 +1,46 @@
-import { useState } from "react";
-import { rotateImage } from "../services/rotationService";
+import { useEffect, useState } from "react";
+import { rotateImage, transformRotate } from "../services/rotationService";
 import { RotateCw } from "lucide-react";
 import ReactDOM from "react-dom";
 
 interface RotationToolProps {
   imageDataUrl: string | null;
-  onResult: (url: string, originalForUndo?: string) => void;
+  onResult: (
+    url: string,
+    originalForUndo?: string,
+    sliderValues?:
+      | { type: "rotation"; values: { angle: number } }
+      | { type: "rotation-transform"; values: { op: string } }
+  ) => void;
   disabled?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  // Externally controlled values so parent can sync UI (e.g., on Undo)
+  rotationValues?: { angle: number };
 }
 
 export default function RotationTool({
   imageDataUrl,
   onResult,
   disabled = false,
+  onOpenChange,
+  rotationValues,
 }: RotationToolProps) {
   const [angle, setAngle] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+
+  const closeModal = () => {
+    setShowModal(false);
+    onOpenChange?.(false);
+  };
 
   const handleRotate = async () => {
     if (!imageDataUrl) return;
     setLoading(true);
     try {
       const result = await rotateImage(imageDataUrl, angle);
-      onResult(result, imageDataUrl);
-      setShowModal(false);
+      onResult(result, imageDataUrl, { type: "rotation", values: { angle } });
+      closeModal();
     } catch (error) {
       console.error("Rotation failed:", error);
     } finally {
@@ -32,13 +48,49 @@ export default function RotationTool({
     }
   };
 
+  const handleQuickTransform = async (
+    op:
+      | "transpose"
+      | "flip0"
+      | "flip1"
+      | "flip-1"
+      | "cw90"
+      | "ccw90"
+      | "rotate180"
+  ) => {
+    if (!imageDataUrl) return;
+    setLoading(true);
+    try {
+      const result = await transformRotate(imageDataUrl, op);
+      onResult(result, imageDataUrl, {
+        type: "rotation-transform",
+        values: { op },
+      });
+      closeModal();
+    } catch (error) {
+      console.error("Transform failed:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Sync internal angle input from external value (e.g., Undo)
+  useEffect(() => {
+    if (rotationValues) {
+      setAngle(rotationValues.angle);
+    }
+  }, [rotationValues]);
+
   return (
     <div className="relative">
       <button
         className={`w-full flex items-center gap-2 px-3 py-2 rounded-md bg-gray-700 text-gray-200 hover:bg-blue-600 transition font-medium ${
           disabled ? "opacity-50 cursor-not-allowed" : ""
         }`}
-        onClick={() => setShowModal(true)}
+        onClick={() => {
+          setShowModal(true);
+          onOpenChange?.(true);
+        }}
         disabled={disabled}
         title="Rotate Image"
       >
@@ -49,18 +101,15 @@ export default function RotationTool({
       {showModal && (
         <>
           {/* Backdrop for closing modal when clicking outside */}
-          <div
-            className="fixed inset-0 z-[90]"
-            onClick={() => setShowModal(false)}
-          />
+          <div className="fixed inset-0 z-[100]" onClick={closeModal} />
 
           {typeof window !== "undefined" &&
           document.getElementById("rotation-modal-anchor")
             ? ReactDOM.createPortal(
-                <div className="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-700 min-w-[320px] w-[350px] relative">
+                <div className="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-700 min-w-[320px] w-[350px] relative z-[120]">
                   <button
                     className="absolute top-2 right-3 text-gray-400 hover:text-white text-xl font-bold"
-                    onClick={() => setShowModal(false)}
+                    onClick={closeModal}
                     title="Close"
                   >
                     ×
@@ -92,14 +141,68 @@ export default function RotationTool({
                         </span>
                       </label>
 
-                      {/* Scale option removed */}
-
-                      {/* Keep original dimensions option removed */}
+                      {/* Quick transforms using transpose/flip */}
+                      <div className="mt-2">
+                        <div className="text-sm text-gray-300 mb-2">
+                          Quick transforms
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => handleQuickTransform("cw90")}
+                            className="px-3 py-2 bg-gray-700 text-gray-100 rounded hover:bg-gray-600 disabled:opacity-50"
+                            disabled={loading || !imageDataUrl}
+                          >
+                            Rotate 90° CW
+                          </button>
+                          <button
+                            onClick={() => handleQuickTransform("ccw90")}
+                            className="px-3 py-2 bg-gray-700 text-gray-100 rounded hover:bg-gray-600 disabled:opacity-50"
+                            disabled={loading || !imageDataUrl}
+                          >
+                            Rotate 90° CCW
+                          </button>
+                          <button
+                            onClick={() => handleQuickTransform("rotate180")}
+                            className="px-3 py-2 bg-gray-700 text-gray-100 rounded hover:bg-gray-600 disabled:opacity-50"
+                            disabled={loading || !imageDataUrl}
+                          >
+                            Rotate 180°
+                          </button>
+                          <button
+                            onClick={() => handleQuickTransform("transpose")}
+                            className="px-3 py-2 bg-gray-700 text-gray-100 rounded hover:bg-gray-600 disabled:opacity-50"
+                            disabled={loading || !imageDataUrl}
+                          >
+                            Transpose
+                          </button>
+                          <button
+                            onClick={() => handleQuickTransform("flip1")}
+                            className="px-3 py-2 bg-gray-700 text-gray-100 rounded hover:bg-gray-600 disabled:opacity-50"
+                            disabled={loading || !imageDataUrl}
+                          >
+                            Flip Horizontal
+                          </button>
+                          <button
+                            onClick={() => handleQuickTransform("flip0")}
+                            className="px-3 py-2 bg-gray-700 text-gray-100 rounded hover:bg-gray-600 disabled:opacity-50"
+                            disabled={loading || !imageDataUrl}
+                          >
+                            Flip Vertical
+                          </button>
+                          <button
+                            onClick={() => handleQuickTransform("flip-1")}
+                            className="px-3 py-2 bg-gray-700 text-gray-100 rounded hover:bg-gray-600 disabled:opacity-50 col-span-2"
+                            disabled={loading || !imageDataUrl}
+                          >
+                            Flip Both Axes
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="flex justify-between mt-4 pt-2 border-t border-gray-700">
                       <button
-                        onClick={() => setShowModal(false)}
+                        onClick={closeModal}
                         className="px-4 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition"
                         disabled={loading}
                       >

@@ -5,7 +5,7 @@ This repository uses GitHub Copilot to assist with code generation and suggestio
 ## Project Overview
 
 - PixelPlus is a Photoshop-like system for photo editing using OpenCV. The project is structured as a monorepo with separate frontend and backend directories.
-- The frontend is built with Next.js, Electron, Tailwind CSS, and lucide-react.
+- The frontend is built with Next.js, TypeScript, Electron, Tailwind CSS, and lucide-react.
 - The backend is developed using FastAPI and OpenCV (Python).
 
 ## Monorepo Structure

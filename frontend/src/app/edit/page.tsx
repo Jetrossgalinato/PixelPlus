@@ -6,20 +6,18 @@ import UndoButton from "../components/UndoButton";
 import ExportButton from "../components/ExportButton";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
-import GrayscaleTool from "../components/GrayscaleTool";
-import RGBTool from "../components/RGBTool";
-import HSVTool from "../components/HSVTool";
+import CombinedColorTool from "../components/CombinedColorTool";
 import DrawingTool from "../components/DrawingTool";
 import TranslationTool from "../components/TranslationTool";
 import RotationTool from "../components/RotationTool";
+import ScaleResizeCropTool from "../components/ScaleResizeCropTool";
 import { useImage } from "../ImageContext";
 
 export default function EditPage() {
   const router = useRouter();
   const { image } = useImage();
   const [processing] = useState(false); // retained for future multi-tool orchestration
-  // Track which slider modal is open: "hsv", "rgb", or null
-  const [openSlider, setOpenSlider] = useState<null | "hsv" | "rgb">(null);
+  // Legacy slider state removed; combined tool manages its own modal
   const [isDrawing, setIsDrawing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const prevResultUrl = useRef<string | null>(null);
@@ -33,27 +31,52 @@ export default function EditPage() {
       url: string;
       hsv: { h: number; s: number; v: number };
       rgb?: { r: number; g: number; b: number };
-      lastTool?: "hsv" | "rgb"; // Track which tool was last used
+      lastTool?:
+        | "hsv"
+        | "rgb"
+        | "translation"
+        | "rotation"
+        | "rotation-transform"
+        | "scale"
+        | "resize"
+        | "interpolation"
+        | "crop"; // Track which tool was last used
     }[]
   >([]); // For resetting to original
+  const [translationVals, setTranslationVals] = useState<{
+    x: number;
+    y: number;
+  }>({ x: 0, y: 0 });
+  const [rotationVal, setRotationVal] = useState<{ angle: number }>({
+    angle: 0,
+  });
   const [editHistory, setEditHistory] = useState<
     {
       url: string;
       hsv: { h: number; s: number; v: number };
       rgb?: { r: number; g: number; b: number };
-      lastTool?: "hsv" | "rgb"; // Track which tool was last used
+      translation?: { x: number; y: number };
+      rotation?: { angle: number } | { op: string };
+      lastTool?:
+        | "hsv"
+        | "rgb"
+        | "translation"
+        | "rotation"
+        | "rotation-transform"
+        | "scale"
+        | "resize"
+        | "interpolation"
+        | "crop"; // Track which tool was last used
     }[]
   >([]); // For step-by-step undo
-  const [hsvSlider, setHsvSlider] = useState<{
-    h: number;
-    s: number;
-    v: number;
-  }>({ h: 0, s: 1, v: 1 });
-  const [rgbSlider, setRgbSlider] = useState<{
-    r: number;
-    g: number;
-    b: number;
-  }>({ r: 1, g: 1, b: 1 });
+  // Keep last-applied HSV/RGB values for history (optional)
+  const [hsvSlider, setHsvSlider] = useState({ h: 0, s: 1, v: 1 });
+  const [rgbSlider, setRgbSlider] = useState({ r: 1, g: 1, b: 1 });
+
+  // Track active modal to hide other anchors
+  const [activeModal, setActiveModal] = useState<
+    null | "color" | "hsv" | "rgb" | "translation" | "rotation" | "scale"
+  >(null);
 
   // Restore edit preview from localStorage on mount
   useEffect(() => {
@@ -68,8 +91,7 @@ export default function EditPage() {
   const [error] = useState<string | null>(null);
 
   // For resetting RGB sliders on Undo
-  const [rgbResetSignal, setRgbResetSignal] = useState(0);
-  const [hsvResetSignal, setHsvResetSignal] = useState(0);
+  // Removed individual tool reset signals (managed by combined modal)
 
   // Receive grayscale or RGB/HSV result from tool component
   const handleEditResult = useCallback(
@@ -77,10 +99,26 @@ export default function EditPage() {
       url: string,
       originalForUndo?: string,
       sliderValues?: {
-        type: "hsv" | "rgb";
+        type:
+          | "hsv"
+          | "rgb"
+          | "translation"
+          | "rotation"
+          | "rotation-transform"
+          | "scale"
+          | "resize"
+          | "interpolation"
+          | "crop";
         values:
           | { h: number; s: number; v: number }
-          | { r: number; g: number; b: number };
+          | { r: number; g: number; b: number }
+          | { x: number; y: number }
+          | { angle: number }
+          | { op: string }
+          | { sx: number; sy: number; interp: string }
+          | { w: number; h: number; interp: string }
+          | { method: string }
+          | { x: number; y: number; w: number; h: number };
       }
     ) => {
       // Debug information
@@ -107,6 +145,10 @@ export default function EditPage() {
             url: result,
             hsv: hsvSlider,
             rgb: rgbSlider,
+            translation: translationVals,
+            // If last tool was rotation with transform op, we store as-is; angle is meaningful for typed rotation
+            rotation:
+              sliderValues?.type === "rotation" ? rotationVal : undefined,
             lastTool: currentTool, // Track which tool was used
           },
         ]);
@@ -135,19 +177,28 @@ export default function EditPage() {
           setRgbSlider(
             sliderValues.values as { r: number; g: number; b: number }
           );
+        } else if (sliderValues.type === "translation") {
+          setTranslationVals(sliderValues.values as { x: number; y: number });
+        } else if (sliderValues.type === "rotation") {
+          setRotationVal(sliderValues.values as { angle: number });
+        } else if (
+          sliderValues.type === "scale" ||
+          sliderValues.type === "resize" ||
+          sliderValues.type === "interpolation" ||
+          sliderValues.type === "crop"
+        ) {
+          // No additional local UI state to sync for these right now
         }
       }
 
       setResult(url);
     },
-    [result, hsvSlider, rgbSlider]
+    [result, hsvSlider, rgbSlider, translationVals, rotationVal]
   );
 
   // Back to default (original) handler
   const handleBackToDefault = useCallback(() => {
-    setRgbResetSignal((s) => s + 1); // trigger RGBTool slider reset
-    setHsvResetSignal((s) => s + 1); // trigger HSVTool slider reset
-    setOpenSlider(null); // Close any open sliders
+    // Close any open modals
 
     if (undoStack.length > 0) {
       setResult(undoStack[0].url);
@@ -157,13 +208,18 @@ export default function EditPage() {
       } else {
         setRgbSlider({ r: 1, g: 1, b: 1 });
       }
+      setTranslationVals({ x: 0, y: 0 });
+      setRotationVal({ angle: 0 });
       setUndoStack([]);
     } else if (image.dataUrl) {
       setResult(null); // will show original placeholder
       setHsvSlider({ h: 0, s: 1, v: 1 });
       setRgbSlider({ r: 1, g: 1, b: 1 });
+      setTranslationVals({ x: 0, y: 0 });
+      setRotationVal({ angle: 0 });
     }
     setEditHistory([]);
+    setActiveModal(null);
   }, [undoStack, image.dataUrl]);
 
   // Undo last edit - goes back one step in edit history
@@ -176,8 +232,8 @@ export default function EditPage() {
       const newHistory = [...editHistory];
       const previousState = newHistory.pop();
 
-      // Always close any open sliders before proceeding with the undo
-      setOpenSlider(null);
+      // Always close any open modals before proceeding with the undo
+      setActiveModal(null);
 
       setEditHistory(newHistory);
       console.log(
@@ -217,13 +273,19 @@ export default function EditPage() {
           if (previousState.rgb) {
             setRgbSlider(previousState.rgb);
           }
+          if (previousState.translation) {
+            setTranslationVals(previousState.translation);
+          } else {
+            setTranslationVals({ x: 0, y: 0 });
+          }
+          if (previousState.rotation && "angle" in previousState.rotation) {
+            setRotationVal(previousState.rotation as { angle: number });
+          } else {
+            setRotationVal({ angle: 0 });
+          }
 
-          // Reset both slider types - but don't automatically open any slider modals
-          setRgbResetSignal((s) => s + 1);
-          setHsvResetSignal((s) => s + 1);
-
-          // Close any open sliders to avoid interfering with future undos
-          setOpenSlider(null);
+          // Close any open modals to avoid interfering with future undos
+          setActiveModal(null);
         } else {
           // Fallback to original image if URL is invalid
           console.warn(
@@ -235,14 +297,16 @@ export default function EditPage() {
             if (undoStack[0].rgb) {
               setRgbSlider(undoStack[0].rgb);
             }
+            setTranslationVals({ x: 0, y: 0 });
+            setRotationVal({ angle: 0 });
           } else {
             setResult(image.dataUrl);
             setHsvSlider({ h: 0, s: 1, v: 1 });
             setRgbSlider({ r: 1, g: 1, b: 1 });
+            setTranslationVals({ x: 0, y: 0 });
+            setRotationVal({ angle: 0 });
           }
-          // Reset both slider types
-          setHsvResetSignal((s) => s + 1);
-          setRgbResetSignal((s) => s + 1);
+          // No UI resets needed here; combined modal manages internal state
         }
       } else if (undoStack.length > 0) {
         setResult(undoStack[0].url);
@@ -250,16 +314,18 @@ export default function EditPage() {
         if (undoStack[0].rgb) {
           setRgbSlider(undoStack[0].rgb);
         }
-        setHsvResetSignal((s) => s + 1);
-        setRgbResetSignal((s) => s + 1);
-        setOpenSlider(null); // Close any open sliders
+        setTranslationVals({ x: 0, y: 0 });
+        setRotationVal({ angle: 0 });
+        // Close any open modals
+        setActiveModal(null);
       } else {
         setResult(null);
         setHsvSlider({ h: 0, s: 1, v: 1 });
         setRgbSlider({ r: 1, g: 1, b: 1 });
-        setHsvResetSignal((s) => s + 1);
-        setRgbResetSignal((s) => s + 1);
-        setOpenSlider(null); // Close any open sliders
+        setTranslationVals({ x: 0, y: 0 });
+        setRotationVal({ angle: 0 });
+        // Close any open modals
+        setActiveModal(null);
       }
     } else if (result) {
       handleBackToDefault();
@@ -274,7 +340,6 @@ export default function EditPage() {
 
     // If this was triggered by an undo action, ensure sliders are closed
     if (isUndoClicked.current) {
-      setOpenSlider(null);
       isUndoClicked.current = false;
     }
   }, [result]);
@@ -338,8 +403,8 @@ export default function EditPage() {
   return (
     <div className="min-h-screen flex flex-row bg-gradient-to-br from-gray-50 to-gray-200 dark:from-gray-900 dark:to-gray-800 relative">
       <aside
-        className="h-screen w-45 min-w-[200px] bg-white/70 dark:bg-gray-900/70 border-r border-gray-200 dark:border-gray-800 flex flex-col items-start py-8 gap-0 shadow-xl z-10 relative backdrop-blur-md"
-        style={{ boxShadow: "0 4px 32px 0 rgba(0,0,0,0.10)" }}
+        className="fixed top-0 left-0 h-screen w-[260px] min-w-[260px] bg-white/70 dark:bg-gray-900/70 border-r border-gray-200 dark:border-gray-800 flex flex-col items-start py-8 gap-0 shadow-xl z-10 backdrop-blur-md"
+        style={{ boxShadow: "0 4px 32px 0 rgba(0,0,0,0.10)", height: "100vh" }}
       >
         {/* Back button at very top, left-aligned */}
         <button
@@ -357,51 +422,17 @@ export default function EditPage() {
           </span>
         </div>
         {/* Tools, all left-aligned */}
-        <div className="w-full flex flex-col items-start gap-4 px-4">
-          {/* Grayscale Tool Button */}
+        <div className="w-full flex flex-col items-start gap-3 px-4">
+          {/* Combined Color Tool Button (HSV + RGB + Grayscale) */}
           <div className="w-full flex flex-col items-start">
-            <GrayscaleTool
+            <CombinedColorTool
+              imageDataUrl={result || image.dataUrl}
               imageFile={image.file}
-              originalDataUrl={image.dataUrl}
-              onResult={handleEditResult}
-              disabled={processing}
-            />
-          </div>
-          {/* Divider */}
-          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
-          {/* HSV Tool Button */}
-          <div className="w-full flex flex-col items-start">
-            <HSVTool
-              imageDataUrl={result || image.dataUrl}
               onResult={handleEditResult}
               disabled={processing || !(result || image.dataUrl)}
-              resetSlidersSignal={{
-                counter: hsvResetSignal,
-                values: hsvSlider,
-              }}
-              layout="horizontal"
-              popoutSliders={true}
-              showSliders={openSlider === "hsv"}
-              setShowSliders={(show: boolean) =>
-                setOpenSlider(show ? "hsv" : null)
-              }
-            />
-          </div>
-          {/* Divider */}
-          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
-          {/* RGB Tool Button */}
-          <div className="w-full flex flex-col items-start">
-            <RGBTool
-              imageDataUrl={result || image.dataUrl}
-              onResult={handleEditResult}
-              disabled={processing || !(result || image.dataUrl)}
-              resetSlidersSignal={rgbResetSignal}
-              layout="horizontal"
-              popoutSliders={true}
-              showSliders={openSlider === "rgb"}
-              setShowSliders={(show: boolean) =>
-                setOpenSlider(show ? "rgb" : null)
-              }
+              onOpenChange={(open) => setActiveModal(open ? "color" : null)}
+              hsvValues={hsvSlider}
+              rgbValues={rgbSlider}
             />
           </div>
           {/* Divider */}
@@ -417,12 +448,27 @@ export default function EditPage() {
           </div>
           {/* Divider */}
           <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          {/* Scale/Resize/Crop Tool Button */}
+          <div className="w-full flex flex-col items-start">
+            <ScaleResizeCropTool
+              imageDataUrl={result || image.dataUrl}
+              onResult={handleEditResult}
+              disabled={processing || !(result || image.dataUrl)}
+              onOpenChange={(open) => setActiveModal(open ? "scale" : null)}
+            />
+          </div>
+          {/* Divider */}
+          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
           {/* Translation Tool Button */}
           <div className="w-full flex flex-col items-start">
             <TranslationTool
               imageDataUrl={result || image.dataUrl}
               onResult={handleEditResult}
               disabled={processing || !(result || image.dataUrl)}
+              onOpenChange={(open) =>
+                setActiveModal(open ? "translation" : null)
+              }
+              translationValues={translationVals}
             />
           </div>
           {/* Divider */}
@@ -433,6 +479,8 @@ export default function EditPage() {
               imageDataUrl={result || image.dataUrl}
               onResult={handleEditResult}
               disabled={processing || !(result || image.dataUrl)}
+              onOpenChange={(open) => setActiveModal(open ? "rotation" : null)}
+              rotationValues={rotationVal}
             />
           </div>
           {/* Divider */}
@@ -442,52 +490,69 @@ export default function EditPage() {
         <div className="flex-1" />
       </aside>
       {/* Main content area shifted right */}
-      <main className="flex-1 flex flex-col items-center px-8 py-8">
+      <main
+        className="flex-1 flex flex-col items-center px-8 py-8"
+        style={{ marginLeft: 260 }}
+      >
         {/* All tool modal anchors - positioned on the right side (always present) */}
         <>
-          {/* HSV slider popout anchor */}
+          {/* Combined Color modal anchor */}
           <div
-            id="hsv-slider-popout-anchor"
-            className={`absolute right-8 z-20 ${
+            id="color-modal-anchor"
+            className={`absolute z-[110] ${
               isDrawing ? "pointer-events-none" : ""
             }`}
-            style={{ top: "150px", minWidth: "350px", minHeight: "180px" }}
+            style={{
+              right: "32px", // move modal further right (was right-8 = 2rem)
+              top: "150px",
+              minWidth: "380px",
+              minHeight: "180px",
+              display:
+                activeModal && activeModal !== "color" ? "none" : undefined,
+            }}
           ></div>
-          {/* RGB slider popout anchor */}
+          {/* Scale/Resize/Crop modal anchor */}
           <div
-            id="rgb-slider-popout-anchor"
-            className={`absolute right-8 ${
+            id="scale-modal-anchor"
+            className={`absolute right-8 z-[110] ${
               isDrawing ? "pointer-events-none" : ""
             }`}
             style={{
               top: "150px",
-              minWidth: "350px",
+              minWidth: "360px",
               minHeight: "180px",
-              zIndex: 10,
+              display:
+                activeModal && activeModal !== "scale" ? "none" : undefined,
             }}
           ></div>
           {/* Translation modal anchor */}
           <div
             id="translation-modal-anchor"
-            className={`absolute right-8 z-30 ${
+            className={`absolute right-8 z-[110] ${
               isDrawing ? "pointer-events-none" : ""
             }`}
             style={{
               top: "150px",
               minWidth: "350px",
               minHeight: "180px",
+              display:
+                activeModal && activeModal !== "translation"
+                  ? "none"
+                  : undefined,
             }}
           ></div>
           {/* Rotation modal anchor */}
           <div
             id="rotation-modal-anchor"
-            className={`absolute right-8 z-30 ${
+            className={`absolute right-8 z-[110] ${
               isDrawing ? "pointer-events-none" : ""
             }`}
             style={{
               top: "150px",
               minWidth: "350px",
               minHeight: "180px",
+              display:
+                activeModal && activeModal !== "rotation" ? "none" : undefined,
             }}
           ></div>
         </>
