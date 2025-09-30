@@ -202,10 +202,13 @@ export default function RGBTool({
 
       {/* Render sliders outside sidebar using portal if popoutSliders is true */}
       {popoutSliders && showSliders
-        ? ReactDOM.createPortal(
-            <div className="rgb-slider-container">{slidersUI}</div>,
-            document.getElementById("rgb-slider-popout-anchor") as HTMLElement
-          )
+        ? typeof window !== "undefined" &&
+          document.getElementById("rgb-slider-popout-anchor")
+          ? ReactDOM.createPortal(
+              <div className="rgb-slider-container">{slidersUI}</div>,
+              document.getElementById("rgb-slider-popout-anchor") as HTMLElement
+            )
+          : null
         : showSliders && slidersUI}
 
       {processing && (

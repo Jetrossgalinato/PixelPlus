@@ -443,52 +443,54 @@ export default function EditPage() {
       </aside>
       {/* Main content area shifted right */}
       <main className="flex-1 flex flex-col items-center px-8 py-8">
-        {/* All tool modal anchors - positioned on the right side */}
-        {!isDrawing && (
-          <>
-            {/* HSV slider popout anchor */}
-            {openSlider !== "rgb" && (
-              <div
-                id="hsv-slider-popout-anchor"
-                className="absolute right-8 z-20"
-                style={{ top: "150px", minWidth: "350px", minHeight: "180px" }}
-              ></div>
-            )}
-            {/* RGB slider popout anchor */}
-            {openSlider !== "hsv" && (
-              <div
-                id="rgb-slider-popout-anchor"
-                className="absolute right-8 z-10"
-                style={{
-                  top: "150px",
-                  minWidth: "350px",
-                  minHeight: "180px",
-                  zIndex: 10,
-                }}
-              ></div>
-            )}
-            {/* Translation modal anchor */}
-            <div
-              id="translation-modal-anchor"
-              className="absolute right-8 z-30"
-              style={{
-                top: "150px",
-                minWidth: "350px",
-                minHeight: "180px",
-              }}
-            ></div>
-            {/* Rotation modal anchor */}
-            <div
-              id="rotation-modal-anchor"
-              className="absolute right-8 z-30"
-              style={{
-                top: "150px",
-                minWidth: "350px",
-                minHeight: "180px",
-              }}
-            ></div>
-          </>
-        )}
+        {/* All tool modal anchors - positioned on the right side (always present) */}
+        <>
+          {/* HSV slider popout anchor */}
+          <div
+            id="hsv-slider-popout-anchor"
+            className={`absolute right-8 z-20 ${
+              isDrawing ? "pointer-events-none" : ""
+            }`}
+            style={{ top: "150px", minWidth: "350px", minHeight: "180px" }}
+          ></div>
+          {/* RGB slider popout anchor */}
+          <div
+            id="rgb-slider-popout-anchor"
+            className={`absolute right-8 ${
+              isDrawing ? "pointer-events-none" : ""
+            }`}
+            style={{
+              top: "150px",
+              minWidth: "350px",
+              minHeight: "180px",
+              zIndex: 10,
+            }}
+          ></div>
+          {/* Translation modal anchor */}
+          <div
+            id="translation-modal-anchor"
+            className={`absolute right-8 z-30 ${
+              isDrawing ? "pointer-events-none" : ""
+            }`}
+            style={{
+              top: "150px",
+              minWidth: "350px",
+              minHeight: "180px",
+            }}
+          ></div>
+          {/* Rotation modal anchor */}
+          <div
+            id="rotation-modal-anchor"
+            className={`absolute right-8 z-30 ${
+              isDrawing ? "pointer-events-none" : ""
+            }`}
+            style={{
+              top: "150px",
+              minWidth: "350px",
+              minHeight: "180px",
+            }}
+          ></div>
+        </>
         {/* Undo and Export buttons at top corners */}
         <div className="w-full flex justify-between items-start mb-2">
           <UndoButton
