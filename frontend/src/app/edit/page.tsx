@@ -11,6 +11,7 @@ import RGBTool from "../components/RGBTool";
 import HSVTool from "../components/HSVTool";
 import DrawingTool from "../components/DrawingTool";
 import TranslationTool from "../components/TranslationTool";
+import RotationTool from "../components/RotationTool";
 import { useImage } from "../ImageContext";
 
 export default function EditPage() {
@@ -426,34 +427,70 @@ export default function EditPage() {
           </div>
           {/* Divider */}
           <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          {/* Rotation Tool Button */}
+          <div className="w-full flex flex-col items-start">
+            <RotationTool
+              imageDataUrl={result || image.dataUrl}
+              onResult={handleEditResult}
+              disabled={processing || !(result || image.dataUrl)}
+            />
+          </div>
+          {/* Divider */}
+          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
         </div>
         {/* Spacer to push content to top */}
         <div className="flex-1" />
       </aside>
       {/* Main content area shifted right */}
       <main className="flex-1 flex flex-col items-center px-8 py-8">
-        {/* HSV slider popout anchor - positioned outside sidebar */}
-        {/* HSV slider popout anchor - positioned outside sidebar */}
-        {!isDrawing && openSlider !== "rgb" && (
+        {/* All tool modal anchors - positioned on the right side (always present) */}
+        <>
+          {/* HSV slider popout anchor */}
           <div
             id="hsv-slider-popout-anchor"
-            className="absolute left-44 z-20"
-            style={{ top: "250px", minWidth: "250px", minHeight: "150px" }}
+            className={`absolute right-8 z-20 ${
+              isDrawing ? "pointer-events-none" : ""
+            }`}
+            style={{ top: "150px", minWidth: "350px", minHeight: "180px" }}
           ></div>
-        )}
-        {/* RGB slider popout anchor - positioned outside sidebar */}
-        {!isDrawing && openSlider !== "hsv" && (
+          {/* RGB slider popout anchor */}
           <div
             id="rgb-slider-popout-anchor"
-            className="absolute left-44 z-10"
+            className={`absolute right-8 ${
+              isDrawing ? "pointer-events-none" : ""
+            }`}
             style={{
-              top: "350px",
-              minWidth: "250px",
-              minHeight: "150px",
+              top: "150px",
+              minWidth: "350px",
+              minHeight: "180px",
               zIndex: 10,
             }}
           ></div>
-        )}
+          {/* Translation modal anchor */}
+          <div
+            id="translation-modal-anchor"
+            className={`absolute right-8 z-30 ${
+              isDrawing ? "pointer-events-none" : ""
+            }`}
+            style={{
+              top: "150px",
+              minWidth: "350px",
+              minHeight: "180px",
+            }}
+          ></div>
+          {/* Rotation modal anchor */}
+          <div
+            id="rotation-modal-anchor"
+            className={`absolute right-8 z-30 ${
+              isDrawing ? "pointer-events-none" : ""
+            }`}
+            style={{
+              top: "150px",
+              minWidth: "350px",
+              minHeight: "180px",
+            }}
+          ></div>
+        </>
         {/* Undo and Export buttons at top corners */}
         <div className="w-full flex justify-between items-start mb-2">
           <UndoButton
