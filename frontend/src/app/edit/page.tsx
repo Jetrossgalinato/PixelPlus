@@ -55,6 +55,11 @@ export default function EditPage() {
     b: number;
   }>({ r: 1, g: 1, b: 1 });
 
+  // Track active modal to hide other anchors
+  const [activeModal, setActiveModal] = useState<
+    null | "hsv" | "rgb" | "translation" | "rotation"
+  >(null);
+
   // Restore edit preview from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem("pixelplus-edit-preview");
@@ -164,6 +169,7 @@ export default function EditPage() {
       setRgbSlider({ r: 1, g: 1, b: 1 });
     }
     setEditHistory([]);
+    setActiveModal(null);
   }, [undoStack, image.dataUrl]);
 
   // Undo last edit - goes back one step in edit history
@@ -178,6 +184,7 @@ export default function EditPage() {
 
       // Always close any open sliders before proceeding with the undo
       setOpenSlider(null);
+      setActiveModal(null);
 
       setEditHistory(newHistory);
       console.log(
@@ -224,6 +231,7 @@ export default function EditPage() {
 
           // Close any open sliders to avoid interfering with future undos
           setOpenSlider(null);
+          setActiveModal(null);
         } else {
           // Fallback to original image if URL is invalid
           console.warn(
@@ -253,6 +261,7 @@ export default function EditPage() {
         setHsvResetSignal((s) => s + 1);
         setRgbResetSignal((s) => s + 1);
         setOpenSlider(null); // Close any open sliders
+        setActiveModal(null);
       } else {
         setResult(null);
         setHsvSlider({ h: 0, s: 1, v: 1 });
@@ -260,6 +269,7 @@ export default function EditPage() {
         setHsvResetSignal((s) => s + 1);
         setRgbResetSignal((s) => s + 1);
         setOpenSlider(null); // Close any open sliders
+        setActiveModal(null);
       }
     } else if (result) {
       handleBackToDefault();
@@ -382,9 +392,10 @@ export default function EditPage() {
               layout="horizontal"
               popoutSliders={true}
               showSliders={openSlider === "hsv"}
-              setShowSliders={(show: boolean) =>
-                setOpenSlider(show ? "hsv" : null)
-              }
+              setShowSliders={(show: boolean) => {
+                setOpenSlider(show ? "hsv" : null);
+                setActiveModal(show ? "hsv" : null);
+              }}
             />
           </div>
           {/* Divider */}
@@ -399,9 +410,10 @@ export default function EditPage() {
               layout="horizontal"
               popoutSliders={true}
               showSliders={openSlider === "rgb"}
-              setShowSliders={(show: boolean) =>
-                setOpenSlider(show ? "rgb" : null)
-              }
+              setShowSliders={(show: boolean) => {
+                setOpenSlider(show ? "rgb" : null);
+                setActiveModal(show ? "rgb" : null);
+              }}
             />
           </div>
           {/* Divider */}
@@ -423,6 +435,9 @@ export default function EditPage() {
               imageDataUrl={result || image.dataUrl}
               onResult={handleEditResult}
               disabled={processing || !(result || image.dataUrl)}
+              onOpenChange={(open) =>
+                setActiveModal(open ? "translation" : null)
+              }
             />
           </div>
           {/* Divider */}
@@ -433,6 +448,7 @@ export default function EditPage() {
               imageDataUrl={result || image.dataUrl}
               onResult={handleEditResult}
               disabled={processing || !(result || image.dataUrl)}
+              onOpenChange={(open) => setActiveModal(open ? "rotation" : null)}
             />
           </div>
           {/* Divider */}
@@ -451,7 +467,13 @@ export default function EditPage() {
             className={`absolute right-8 z-20 ${
               isDrawing ? "pointer-events-none" : ""
             }`}
-            style={{ top: "150px", minWidth: "350px", minHeight: "180px" }}
+            style={{
+              top: "150px",
+              minWidth: "350px",
+              minHeight: "180px",
+              display:
+                activeModal && activeModal !== "hsv" ? "none" : undefined,
+            }}
           ></div>
           {/* RGB slider popout anchor */}
           <div
@@ -464,6 +486,8 @@ export default function EditPage() {
               minWidth: "350px",
               minHeight: "180px",
               zIndex: 10,
+              display:
+                activeModal && activeModal !== "rgb" ? "none" : undefined,
             }}
           ></div>
           {/* Translation modal anchor */}
@@ -476,6 +500,10 @@ export default function EditPage() {
               top: "150px",
               minWidth: "350px",
               minHeight: "180px",
+              display:
+                activeModal && activeModal !== "translation"
+                  ? "none"
+                  : undefined,
             }}
           ></div>
           {/* Rotation modal anchor */}
@@ -488,6 +516,8 @@ export default function EditPage() {
               top: "150px",
               minWidth: "350px",
               minHeight: "180px",
+              display:
+                activeModal && activeModal !== "rotation" ? "none" : undefined,
             }}
           ></div>
         </>

@@ -7,16 +7,23 @@ interface RotationToolProps {
   imageDataUrl: string | null;
   onResult: (url: string, originalForUndo?: string) => void;
   disabled?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export default function RotationTool({
   imageDataUrl,
   onResult,
   disabled = false,
+  onOpenChange,
 }: RotationToolProps) {
   const [angle, setAngle] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+
+  const closeModal = () => {
+    setShowModal(false);
+    onOpenChange?.(false);
+  };
 
   const handleRotate = async () => {
     if (!imageDataUrl) return;
@@ -24,7 +31,7 @@ export default function RotationTool({
     try {
       const result = await rotateImage(imageDataUrl, angle);
       onResult(result, imageDataUrl);
-      setShowModal(false);
+      closeModal();
     } catch (error) {
       console.error("Rotation failed:", error);
     } finally {
@@ -38,7 +45,10 @@ export default function RotationTool({
         className={`w-full flex items-center gap-2 px-3 py-2 rounded-md bg-gray-700 text-gray-200 hover:bg-blue-600 transition font-medium ${
           disabled ? "opacity-50 cursor-not-allowed" : ""
         }`}
-        onClick={() => setShowModal(true)}
+        onClick={() => {
+          setShowModal(true);
+          onOpenChange?.(true);
+        }}
         disabled={disabled}
         title="Rotate Image"
       >
@@ -49,10 +59,7 @@ export default function RotationTool({
       {showModal && (
         <>
           {/* Backdrop for closing modal when clicking outside */}
-          <div
-            className="fixed inset-0 z-[90]"
-            onClick={() => setShowModal(false)}
-          />
+          <div className="fixed inset-0 z-[90]" onClick={closeModal} />
 
           {typeof window !== "undefined" &&
           document.getElementById("rotation-modal-anchor")
@@ -60,7 +67,7 @@ export default function RotationTool({
                 <div className="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-700 min-w-[320px] w-[350px] relative">
                   <button
                     className="absolute top-2 right-3 text-gray-400 hover:text-white text-xl font-bold"
-                    onClick={() => setShowModal(false)}
+                    onClick={closeModal}
                     title="Close"
                   >
                     ×

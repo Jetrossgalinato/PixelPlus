@@ -7,17 +7,24 @@ interface TranslationToolProps {
   imageDataUrl: string | null;
   onResult: (url: string, originalForUndo?: string) => void;
   disabled?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export default function TranslationTool({
   imageDataUrl,
   onResult,
   disabled = false,
+  onOpenChange,
 }: TranslationToolProps) {
   const [shiftX, setShiftX] = useState<number>(0);
   const [shiftY, setShiftY] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+
+  const closeModal = () => {
+    setShowModal(false);
+    onOpenChange?.(false);
+  };
 
   const handleTranslate = async () => {
     if (!imageDataUrl) return;
@@ -25,19 +32,18 @@ export default function TranslationTool({
     try {
       const result = await translateImage(imageDataUrl, shiftX, shiftY);
       onResult(result, imageDataUrl);
-      setShowModal(false);
+      closeModal();
     } catch (error) {
       console.error("Translation failed:", error);
     } finally {
       setLoading(false);
     }
   };
-
   const modalContent = (
     <div className="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-700 min-w-[320px] w-[350px] relative">
       <button
         className="absolute top-2 right-3 text-gray-400 hover:text-white text-xl font-bold"
-        onClick={() => setShowModal(false)}
+        onClick={closeModal}
         title="Close"
       >
         ×
@@ -86,7 +92,7 @@ export default function TranslationTool({
 
         <div className="flex justify-between mt-4 pt-2 border-t border-gray-700">
           <button
-            onClick={() => setShowModal(false)}
+            onClick={closeModal}
             className="px-4 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition"
             disabled={loading}
           >
@@ -137,7 +143,10 @@ export default function TranslationTool({
         className={`w-full flex items-center gap-2 px-3 py-2 rounded-md bg-gray-700 text-gray-200 hover:bg-blue-600 transition font-medium ${
           disabled ? "opacity-50 cursor-not-allowed" : ""
         }`}
-        onClick={() => setShowModal(true)}
+        onClick={() => {
+          setShowModal(true);
+          onOpenChange?.(true);
+        }}
         disabled={disabled}
         title="Translate Image"
       >
@@ -148,10 +157,7 @@ export default function TranslationTool({
       {showModal && (
         <>
           {/* Backdrop for closing modal when clicking outside */}
-          <div
-            className="fixed inset-0 z-[90]"
-            onClick={() => setShowModal(false)}
-          />
+          <div className="fixed inset-0 z-[90]" onClick={closeModal} />
 
           {typeof window !== "undefined" &&
             document.getElementById("translation-modal-anchor") &&
