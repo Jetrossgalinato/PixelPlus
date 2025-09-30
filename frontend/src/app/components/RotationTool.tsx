@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { rotateImage } from "../services/rotationService";
+import { rotateImage, transformRotate } from "../services/rotationService";
 import { RotateCw } from "lucide-react";
 import ReactDOM from "react-dom";
 
@@ -34,6 +34,29 @@ export default function RotationTool({
       closeModal();
     } catch (error) {
       console.error("Rotation failed:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuickTransform = async (
+    op:
+      | "transpose"
+      | "flip0"
+      | "flip1"
+      | "flip-1"
+      | "cw90"
+      | "ccw90"
+      | "rotate180"
+  ) => {
+    if (!imageDataUrl) return;
+    setLoading(true);
+    try {
+      const result = await transformRotate(imageDataUrl, op);
+      onResult(result, imageDataUrl);
+      closeModal();
+    } catch (error) {
+      console.error("Transform failed:", error);
     } finally {
       setLoading(false);
     }
@@ -99,14 +122,68 @@ export default function RotationTool({
                         </span>
                       </label>
 
-                      {/* Scale option removed */}
-
-                      {/* Keep original dimensions option removed */}
+                      {/* Quick transforms using transpose/flip */}
+                      <div className="mt-2">
+                        <div className="text-sm text-gray-300 mb-2">
+                          Quick transforms
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => handleQuickTransform("cw90")}
+                            className="px-3 py-2 bg-gray-700 text-gray-100 rounded hover:bg-gray-600 disabled:opacity-50"
+                            disabled={loading || !imageDataUrl}
+                          >
+                            Rotate 90° CW
+                          </button>
+                          <button
+                            onClick={() => handleQuickTransform("ccw90")}
+                            className="px-3 py-2 bg-gray-700 text-gray-100 rounded hover:bg-gray-600 disabled:opacity-50"
+                            disabled={loading || !imageDataUrl}
+                          >
+                            Rotate 90° CCW
+                          </button>
+                          <button
+                            onClick={() => handleQuickTransform("rotate180")}
+                            className="px-3 py-2 bg-gray-700 text-gray-100 rounded hover:bg-gray-600 disabled:opacity-50"
+                            disabled={loading || !imageDataUrl}
+                          >
+                            Rotate 180°
+                          </button>
+                          <button
+                            onClick={() => handleQuickTransform("transpose")}
+                            className="px-3 py-2 bg-gray-700 text-gray-100 rounded hover:bg-gray-600 disabled:opacity-50"
+                            disabled={loading || !imageDataUrl}
+                          >
+                            Transpose
+                          </button>
+                          <button
+                            onClick={() => handleQuickTransform("flip1")}
+                            className="px-3 py-2 bg-gray-700 text-gray-100 rounded hover:bg-gray-600 disabled:opacity-50"
+                            disabled={loading || !imageDataUrl}
+                          >
+                            Flip Horizontal
+                          </button>
+                          <button
+                            onClick={() => handleQuickTransform("flip0")}
+                            className="px-3 py-2 bg-gray-700 text-gray-100 rounded hover:bg-gray-600 disabled:opacity-50"
+                            disabled={loading || !imageDataUrl}
+                          >
+                            Flip Vertical
+                          </button>
+                          <button
+                            onClick={() => handleQuickTransform("flip-1")}
+                            className="px-3 py-2 bg-gray-700 text-gray-100 rounded hover:bg-gray-600 disabled:opacity-50 col-span-2"
+                            disabled={loading || !imageDataUrl}
+                          >
+                            Flip Both Axes
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="flex justify-between mt-4 pt-2 border-t border-gray-700">
                       <button
-                        onClick={() => setShowModal(false)}
+                        onClick={closeModal}
                         className="px-4 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition"
                         disabled={loading}
                       >

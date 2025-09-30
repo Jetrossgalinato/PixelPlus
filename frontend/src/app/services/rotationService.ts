@@ -56,3 +56,39 @@ export const rotateImage = async (
     return imageBase64; // Return original image on error
   }
 };
+
+/**
+ * Apply a fast transform (transpose/flip/90deg) using OpenCV ops on backend
+ */
+export const transformRotate = async (
+  imageBase64: string,
+  operation:
+    | "transpose"
+    | "flip0"
+    | "flip1"
+    | "flip-1"
+    | "cw90"
+    | "ccw90"
+    | "rotate180"
+): Promise<string> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/rotation/transform`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ image: imageBase64, operation }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to transform image: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error);
+    return data.image;
+  } catch (err) {
+    console.error("Error applying transform:", err);
+    return imageBase64;
+  }
+};
