@@ -10,6 +10,7 @@ import CombinedColorTool from "../components/CombinedColorTool";
 import DrawingTool from "../components/DrawingTool";
 import TranslationTool from "../components/TranslationTool";
 import RotationTool from "../components/RotationTool";
+import ScaleResizeCropTool from "../components/ScaleResizeCropTool";
 import { useImage } from "../ImageContext";
 
 export default function EditPage() {
@@ -35,7 +36,11 @@ export default function EditPage() {
         | "rgb"
         | "translation"
         | "rotation"
-        | "rotation-transform"; // Track which tool was last used
+        | "rotation-transform"
+        | "scale"
+        | "resize"
+        | "interpolation"
+        | "crop"; // Track which tool was last used
     }[]
   >([]); // For resetting to original
   const [translationVals, setTranslationVals] = useState<{
@@ -57,7 +62,11 @@ export default function EditPage() {
         | "rgb"
         | "translation"
         | "rotation"
-        | "rotation-transform"; // Track which tool was last used
+        | "rotation-transform"
+        | "scale"
+        | "resize"
+        | "interpolation"
+        | "crop"; // Track which tool was last used
     }[]
   >([]); // For step-by-step undo
   // Keep last-applied HSV/RGB values for history (optional)
@@ -66,7 +75,7 @@ export default function EditPage() {
 
   // Track active modal to hide other anchors
   const [activeModal, setActiveModal] = useState<
-    null | "color" | "hsv" | "rgb" | "translation" | "rotation"
+    null | "color" | "hsv" | "rgb" | "translation" | "rotation" | "scale"
   >(null);
 
   // Restore edit preview from localStorage on mount
@@ -90,13 +99,26 @@ export default function EditPage() {
       url: string,
       originalForUndo?: string,
       sliderValues?: {
-        type: "hsv" | "rgb" | "translation" | "rotation" | "rotation-transform";
+        type:
+          | "hsv"
+          | "rgb"
+          | "translation"
+          | "rotation"
+          | "rotation-transform"
+          | "scale"
+          | "resize"
+          | "interpolation"
+          | "crop";
         values:
           | { h: number; s: number; v: number }
           | { r: number; g: number; b: number }
           | { x: number; y: number }
           | { angle: number }
-          | { op: string };
+          | { op: string }
+          | { sx: number; sy: number; interp: string }
+          | { w: number; h: number; interp: string }
+          | { method: string }
+          | { x: number; y: number; w: number; h: number };
       }
     ) => {
       // Debug information
@@ -159,6 +181,13 @@ export default function EditPage() {
           setTranslationVals(sliderValues.values as { x: number; y: number });
         } else if (sliderValues.type === "rotation") {
           setRotationVal(sliderValues.values as { angle: number });
+        } else if (
+          sliderValues.type === "scale" ||
+          sliderValues.type === "resize" ||
+          sliderValues.type === "interpolation" ||
+          sliderValues.type === "crop"
+        ) {
+          // No additional local UI state to sync for these right now
         }
       }
 
@@ -419,6 +448,17 @@ export default function EditPage() {
           </div>
           {/* Divider */}
           <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          {/* Scale/Resize/Crop Tool Button */}
+          <div className="w-full flex flex-col items-start">
+            <ScaleResizeCropTool
+              imageDataUrl={result || image.dataUrl}
+              onResult={handleEditResult}
+              disabled={processing || !(result || image.dataUrl)}
+              onOpenChange={(open) => setActiveModal(open ? "scale" : null)}
+            />
+          </div>
+          {/* Divider */}
+          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
           {/* Translation Tool Button */}
           <div className="w-full flex flex-col items-start">
             <TranslationTool
@@ -469,6 +509,20 @@ export default function EditPage() {
               minHeight: "180px",
               display:
                 activeModal && activeModal !== "color" ? "none" : undefined,
+            }}
+          ></div>
+          {/* Scale/Resize/Crop modal anchor */}
+          <div
+            id="scale-modal-anchor"
+            className={`absolute right-8 z-[110] ${
+              isDrawing ? "pointer-events-none" : ""
+            }`}
+            style={{
+              top: "150px",
+              minWidth: "360px",
+              minHeight: "180px",
+              display:
+                activeModal && activeModal !== "scale" ? "none" : undefined,
             }}
           ></div>
           {/* Translation modal anchor */}
