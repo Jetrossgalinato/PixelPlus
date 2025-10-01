@@ -520,7 +520,7 @@ export default function EditPage() {
           ></div>
           {/* Resize/Crop modal anchor */}
           <div
-            id="scale-modal-anchor"
+            id="resize-crop-modal-anchor"
             className={`absolute right-8 z-[110] ${
               isDrawing ? "pointer-events-none" : ""
             }`}
