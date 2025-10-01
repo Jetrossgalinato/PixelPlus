@@ -26,6 +26,12 @@ type Props = {
   onOpenChange?: (open: boolean) => void;
 };
 
+// Utility function to ensure valid dimensions
+const ensureValidNumber = (value: string | number, min: number = 1): number => {
+  const parsed = typeof value === "string" ? parseInt(value) : value;
+  return isNaN(parsed) || parsed < min ? min : parsed;
+};
+
 export default function ResizeCropTool({
   imageDataUrl,
   onResult,
@@ -39,10 +45,37 @@ export default function ResizeCropTool({
 
   const [interp, setInterp] = useState<InterpMethod>("linear");
 
-  // resize
-  const [w, setW] = useState<number>(512);
-  const [h, setH] = useState<number>(512);
-  const [keepAspect, setKeepAspect] = useState<boolean>(false);
+  // Store original image dimensions
+  const [originalWidth, setOriginalWidth] = useState<number>(0);
+  const [originalHeight, setOriginalHeight] = useState<number>(0);
+
+  // resize - now using scaling factors where 1.0 = original size
+  const [scaleX, setScaleX] = useState<number>(1.0);
+  const [scaleY, setScaleY] = useState<number>(1.0);
+  const [keepAspect, setKeepAspect] = useState<boolean>(true); // Default to true for better UX
+
+  // Computed width and height in pixels based on scaling factors
+  const w = Math.round(originalWidth * scaleX);
+  const h = Math.round(originalHeight * scaleY);
+
+  // Initialize dimensions based on the actual image when it becomes available
+  useEffect(() => {
+    if (imageDataUrl) {
+      const img = new Image();
+      img.onload = () => {
+        // Store original image dimensions
+        setOriginalWidth(img.width);
+        setOriginalHeight(img.height);
+
+        // Set scale factor to 1.0 (original size)
+        setScaleX(1.0);
+        setScaleY(1.0);
+
+        // No need to set aspect ratio for scaling factors
+      };
+      img.src = imageDataUrl;
+    }
+  }, [imageDataUrl]);
 
   // crop
   const [cx, setCx] = useState<number>(0);
@@ -61,6 +94,7 @@ export default function ResizeCropTool({
     try {
       let url = imageDataUrl;
       if (mode === "resize") {
+        // Use computed w and h (from scaling factors) for resize API
         url = await resizeImage(imageDataUrl, w, h, interp);
         onResult(url, imageDataUrl, {
           type: "resize",
@@ -89,14 +123,57 @@ export default function ResizeCropTool({
     }
   };
 
+  // We no longer need to store aspect ratio as a separate state
+  // Track which dimension was last changed to avoid infinite loops
+  const [lastChanged, setLastChanged] = useState<"width" | "height" | null>(
+    null
+  );
+
+  // For scaling factors, we don't need a separate aspect ratio state
+  // The original image's aspect ratio is maintained by the scaling factors themselves
+
+  // Handle dimension changes to maintain aspect ratio
+  // Now updating scale factors instead of direct dimensions
+  const handleWidthChange = (value: string) => {
+    const newPixelWidth = ensureValidNumber(value, 1);
+    // Convert pixel width back to scale factor
+    const newScaleX = originalWidth > 0 ? newPixelWidth / originalWidth : 1.0;
+    setScaleX(newScaleX);
+    setLastChanged("width");
+  };
+
+  const handleHeightChange = (value: string) => {
+    const newPixelHeight = ensureValidNumber(value, 1);
+    // Convert pixel height back to scale factor
+    const newScaleY =
+      originalHeight > 0 ? newPixelHeight / originalHeight : 1.0;
+    setScaleY(newScaleY);
+    setLastChanged("height");
+  };
+
+  // Crop dimension handlers
+  const handleCropX = (value: string) => setCx(ensureValidNumber(value, 0));
+  const handleCropY = (value: string) => setCy(ensureValidNumber(value, 0));
+  const handleCropWidth = (value: string) => setCw(ensureValidNumber(value, 1));
+  const handleCropHeight = (value: string) =>
+    setCh(ensureValidNumber(value, 1));
+
   useEffect(() => {
-    if (keepAspect) {
-      const aspect = w / Math.max(1, h);
-      // keep minimal enforcement when one changes
-      setH(Math.max(1, Math.round(w / Math.max(0.0001, aspect))));
+    if (!keepAspect) return;
+
+    // When keeping aspect ratio, both scale factors should be equal
+    if (lastChanged === "width" && scaleX > 0) {
+      // Set Y scale to match X scale to maintain aspect ratio
+      if (scaleX !== scaleY) {
+        setScaleY(scaleX);
+      }
+    } else if (lastChanged === "height" && scaleY > 0) {
+      // Set X scale to match Y scale to maintain aspect ratio
+      if (scaleY !== scaleX) {
+        setScaleX(scaleY);
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [w]);
+  }, [scaleX, scaleY, keepAspect, lastChanged]);
 
   const modal = (
     <div className="bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-700 min-w-[360px] w-[420px] relative">
@@ -121,16 +198,7 @@ export default function ResizeCropTool({
           >
             Resize
           </button>
-          <button
-            className={`px-3 py-1 rounded ${
-              mode === "interpolation"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-700 text-gray-200"
-            }`}
-            onClick={() => setMode("interpolation")}
-          >
-            Interpolation
-          </button>
+
           <button
             className={`px-3 py-1 rounded ${
               mode === "crop"
@@ -149,24 +217,46 @@ export default function ResizeCropTool({
             <div className="text-sm text-gray-200 font-medium">Resize</div>
             <div className="flex gap-2">
               <label className="text-xs text-gray-200 flex-1">
-                Width
+                Width ({w}px)
                 <input
                   type="number"
-                  min={1}
-                  value={w}
-                  onChange={(e) => setW(parseInt(e.target.value || "1", 10))}
+                  min={0.1}
+                  step={0.1}
+                  value={scaleX.toFixed(1)}
+                  onChange={(e) =>
+                    handleWidthChange(
+                      Math.round(
+                        originalWidth * parseFloat(e.target.value)
+                      ).toString()
+                    )
+                  }
                   className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
+                  title="Scale factor where 1.0 is original size"
                 />
+                <span className="text-gray-400 text-xs">
+                  Scale: {scaleX.toFixed(1)}x
+                </span>
               </label>
               <label className="text-xs text-gray-200 flex-1">
-                Height
+                Height ({h}px)
                 <input
                   type="number"
-                  min={1}
-                  value={h}
-                  onChange={(e) => setH(parseInt(e.target.value || "1", 10))}
+                  min={0.1}
+                  step={0.1}
+                  value={scaleY.toFixed(1)}
+                  onChange={(e) =>
+                    handleHeightChange(
+                      Math.round(
+                        originalHeight * parseFloat(e.target.value)
+                      ).toString()
+                    )
+                  }
                   className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
+                  title="Scale factor where 1.0 is original size"
                 />
+                <span className="text-gray-400 text-xs">
+                  Scale: {scaleY.toFixed(1)}x
+                </span>
               </label>
             </div>
             <label className="text-xs text-gray-200 inline-flex items-center gap-2">
@@ -194,54 +284,6 @@ export default function ResizeCropTool({
           </div>
         )}
 
-        {/* Interpolation (method focus) */}
-        {mode === "interpolation" && (
-          <div className="flex flex-col gap-3 bg-gray-800/60 p-3 rounded border border-gray-700">
-            <div className="text-sm text-gray-200 font-medium">
-              Interpolation
-            </div>
-            <label className="text-xs text-gray-200">
-              Method
-              <select
-                value={interp}
-                onChange={(e) => setInterp(e.target.value as InterpMethod)}
-                className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
-              >
-                <option value="nearest">Nearest</option>
-                <option value="linear">Linear (Bilinear)</option>
-                <option value="cubic">Cubic</option>
-                <option value="area">Area</option>
-                <option value="lanczos">Lanczos4</option>
-              </select>
-            </label>
-            <div className="text-xs text-gray-400">
-              Applies resize with the chosen interpolation to target size.
-            </div>
-            <div className="flex gap-2">
-              <label className="text-xs text-gray-200 flex-1">
-                Width
-                <input
-                  type="number"
-                  min={1}
-                  value={w}
-                  onChange={(e) => setW(parseInt(e.target.value || "1", 10))}
-                  className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
-                />
-              </label>
-              <label className="text-xs text-gray-200 flex-1">
-                Height
-                <input
-                  type="number"
-                  min={1}
-                  value={h}
-                  onChange={(e) => setH(parseInt(e.target.value || "1", 10))}
-                  className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
-                />
-              </label>
-            </div>
-          </div>
-        )}
-
         {/* Crop */}
         {mode === "crop" && (
           <div className="flex flex-col gap-3 bg-gray-800/60 p-3 rounded border border-gray-700">
@@ -254,7 +296,7 @@ export default function ResizeCropTool({
                 <input
                   type="number"
                   value={cx}
-                  onChange={(e) => setCx(parseInt(e.target.value || "0", 10))}
+                  onChange={(e) => handleCropX(e.target.value)}
                   className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
                 />
               </label>
@@ -263,7 +305,7 @@ export default function ResizeCropTool({
                 <input
                   type="number"
                   value={cy}
-                  onChange={(e) => setCy(parseInt(e.target.value || "0", 10))}
+                  onChange={(e) => handleCropY(e.target.value)}
                   className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
                 />
               </label>
@@ -273,7 +315,7 @@ export default function ResizeCropTool({
                   type="number"
                   min={1}
                   value={cw}
-                  onChange={(e) => setCw(parseInt(e.target.value || "1", 10))}
+                  onChange={(e) => handleCropWidth(e.target.value)}
                   className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
                 />
               </label>
@@ -283,7 +325,7 @@ export default function ResizeCropTool({
                   type="number"
                   min={1}
                   value={ch}
-                  onChange={(e) => setCh(parseInt(e.target.value || "1", 10))}
+                  onChange={(e) => handleCropHeight(e.target.value)}
                   className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
                 />
               </label>
@@ -339,10 +381,12 @@ export default function ResizeCropTool({
         <>
           <div className="fixed inset-0 z-[100]" onClick={closeModal} />
           {typeof window !== "undefined" &&
-          document.getElementById("scale-modal-anchor")
+          document.getElementById("resize-crop-modal-anchor")
             ? ReactDOM.createPortal(
                 <div className="z-[120] relative">{modal}</div>,
-                document.getElementById("scale-modal-anchor") as HTMLElement
+                document.getElementById(
+                  "resize-crop-modal-anchor"
+                ) as HTMLElement
               )
             : null}
         </>

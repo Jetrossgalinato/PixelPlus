@@ -10,7 +10,7 @@ import CombinedColorTool from "../components/CombinedColorTool";
 import DrawingTool from "../components/DrawingTool";
 import TranslationTool from "../components/TranslationTool";
 import RotationTool from "../components/RotationTool";
-import ScaleResizeCropTool from "../components/ScaleResizeCropTool";
+import ResizeCropTool from "../components/ResizeCropTool";
 import { useImage } from "../ImageContext";
 
 export default function EditPage() {
@@ -37,7 +37,6 @@ export default function EditPage() {
         | "translation"
         | "rotation"
         | "rotation-transform"
-        | "scale"
         | "resize"
         | "interpolation"
         | "crop"; // Track which tool was last used
@@ -63,7 +62,6 @@ export default function EditPage() {
         | "translation"
         | "rotation"
         | "rotation-transform"
-        | "scale"
         | "resize"
         | "interpolation"
         | "crop"; // Track which tool was last used
@@ -75,7 +73,7 @@ export default function EditPage() {
 
   // Track active modal to hide other anchors
   const [activeModal, setActiveModal] = useState<
-    null | "color" | "hsv" | "rgb" | "translation" | "rotation" | "scale"
+    null | "color" | "hsv" | "rgb" | "translation" | "rotation" | "resize"
   >(null);
 
   // Restore edit preview from localStorage on mount
@@ -139,6 +137,10 @@ export default function EditPage() {
         console.log(
           `Adding current result to history: ${result}, tool: ${currentTool}`
         );
+
+        // Make sure we handle the tool type properly (scale is now removed)
+        const toolType = currentTool === "scale" ? "resize" : currentTool;
+
         setEditHistory((prev) => [
           ...prev,
           {
@@ -149,7 +151,7 @@ export default function EditPage() {
             // If last tool was rotation with transform op, we store as-is; angle is meaningful for typed rotation
             rotation:
               sliderValues?.type === "rotation" ? rotationVal : undefined,
-            lastTool: currentTool, // Track which tool was used
+            lastTool: toolType, // Track which tool was used
           },
         ]);
       } else if (originalForUndo) {
@@ -157,12 +159,17 @@ export default function EditPage() {
         console.log(
           `First edit, saving original to undo stack: ${originalForUndo}`
         );
+
+        // Make sure we handle the tool type properly (scale is now removed)
+        const toolType =
+          sliderValues?.type === "scale" ? "resize" : sliderValues?.type;
+
         setUndoStack([
           {
             url: originalForUndo,
             hsv: { h: 0, s: 1, v: 1 },
             rgb: { r: 1, g: 1, b: 1 },
-            lastTool: sliderValues?.type,
+            lastTool: toolType,
           },
         ]);
       }
@@ -448,13 +455,13 @@ export default function EditPage() {
           </div>
           {/* Divider */}
           <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
-          {/* Scale/Resize/Crop Tool Button */}
+          {/* Resize/Crop Tool Button */}
           <div className="w-full flex flex-col items-start">
-            <ScaleResizeCropTool
+            <ResizeCropTool
               imageDataUrl={result || image.dataUrl}
               onResult={handleEditResult}
               disabled={processing || !(result || image.dataUrl)}
-              onOpenChange={(open) => setActiveModal(open ? "scale" : null)}
+              onOpenChange={(open) => setActiveModal(open ? "resize" : null)}
             />
           </div>
           {/* Divider */}
@@ -511,9 +518,9 @@ export default function EditPage() {
                 activeModal && activeModal !== "color" ? "none" : undefined,
             }}
           ></div>
-          {/* Scale/Resize/Crop modal anchor */}
+          {/* Resize/Crop modal anchor */}
           <div
-            id="scale-modal-anchor"
+            id="resize-crop-modal-anchor"
             className={`absolute right-8 z-[110] ${
               isDrawing ? "pointer-events-none" : ""
             }`}
@@ -522,7 +529,7 @@ export default function EditPage() {
               minWidth: "360px",
               minHeight: "180px",
               display:
-                activeModal && activeModal !== "scale" ? "none" : undefined,
+                activeModal && activeModal !== "resize" ? "none" : undefined,
             }}
           ></div>
           {/* Translation modal anchor */}
