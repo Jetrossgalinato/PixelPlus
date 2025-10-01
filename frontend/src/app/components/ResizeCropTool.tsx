@@ -198,16 +198,7 @@ export default function ResizeCropTool({
           >
             Resize
           </button>
-          <button
-            className={`px-3 py-1 rounded ${
-              mode === "interpolation"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-700 text-gray-200"
-            }`}
-            onClick={() => setMode("interpolation")}
-          >
-            Interpolation
-          </button>
+
           <button
             className={`px-3 py-1 rounded ${
               mode === "crop"
@@ -289,84 +280,6 @@ export default function ResizeCropTool({
                 <option value="area">Area</option>
                 <option value="lanczos">Lanczos4</option>
               </select>
-            </label>
-          </div>
-        )}
-
-        {/* Interpolation (method focus) */}
-        {mode === "interpolation" && (
-          <div className="flex flex-col gap-3 bg-gray-800/60 p-3 rounded border border-gray-700">
-            <div className="text-sm text-gray-200 font-medium">
-              Interpolation
-            </div>
-            <label className="text-xs text-gray-200">
-              Method
-              <select
-                value={interp}
-                onChange={(e) => setInterp(e.target.value as InterpMethod)}
-                className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
-              >
-                <option value="nearest">Nearest</option>
-                <option value="linear">Linear (Bilinear)</option>
-                <option value="cubic">Cubic</option>
-                <option value="area">Area</option>
-                <option value="lanczos">Lanczos4</option>
-              </select>
-            </label>
-            <div className="text-xs text-gray-400">
-              Applies resize with the chosen interpolation to target size.
-            </div>
-            <div className="flex gap-2">
-              <label className="text-xs text-gray-200 flex-1">
-                Width ({w}px)
-                <input
-                  type="number"
-                  min={0.1}
-                  step={0.1}
-                  value={scaleX.toFixed(1)}
-                  onChange={(e) =>
-                    handleWidthChange(
-                      Math.round(
-                        originalWidth * parseFloat(e.target.value)
-                      ).toString()
-                    )
-                  }
-                  className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
-                  title="Scale factor where 1.0 is original size"
-                />
-                <span className="text-gray-400 text-xs">
-                  Scale: {scaleX.toFixed(1)}x
-                </span>
-              </label>
-              <label className="text-xs text-gray-200 flex-1">
-                Height ({h}px)
-                <input
-                  type="number"
-                  min={0.1}
-                  step={0.1}
-                  value={scaleY.toFixed(1)}
-                  onChange={(e) =>
-                    handleHeightChange(
-                      Math.round(
-                        originalHeight * parseFloat(e.target.value)
-                      ).toString()
-                    )
-                  }
-                  className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
-                  title="Scale factor where 1.0 is original size"
-                />
-                <span className="text-gray-400 text-xs">
-                  Scale: {scaleY.toFixed(1)}x
-                </span>
-              </label>
-            </div>
-            <label className="text-xs text-gray-200 inline-flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={keepAspect}
-                onChange={(e) => setKeepAspect(e.target.checked)}
-              />{" "}
-              Keep Aspect
             </label>
           </div>
         )}
