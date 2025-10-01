@@ -20,21 +20,6 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   return data as T;
 }
 
-export const scaleImage = async (
-  imageBase64: string,
-  scaleX: number,
-  scaleY: number,
-  interpolation: InterpMethod = "linear"
-): Promise<string> => {
-  const data = await postJson<{ image: string }>(`${API_BASE_URL}/scaling`, {
-    image: imageBase64,
-    scale_x: scaleX,
-    scale_y: scaleY,
-    interpolation,
-  });
-  return data.image;
-};
-
 export const resizeImage = async (
   imageBase64: string,
   width: number,
