@@ -6,11 +6,22 @@ import base64
 router = APIRouter()
 
 def base64_to_image(base64_string: str):
-    if 'base64,' in base64_string:
-        base64_string = base64_string.split('base64,')[1]
-    image_bytes = base64.b64decode(base64_string)
-    npimg = np.frombuffer(image_bytes, np.uint8)
-    return cv2.imdecode(npimg, cv2.IMREAD_COLOR)
+    try:
+        # Remove data URI prefix if present
+        if ',' in base64_string:
+            base64_string = base64_string.split(',', 1)[1]
+        
+        # Decode base64 string
+        image_bytes = base64.b64decode(base64_string)
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        
+        # Decode image
+        img = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
+        if img is None:
+            raise ValueError("Failed to decode image data")
+        return img
+    except Exception as e:
+        raise ValueError(f"Error decoding image: {str(e)}")
 
 def image_to_base64(image: np.ndarray) -> str:
     _, buffer = cv2.imencode('.png', image)
@@ -37,15 +48,20 @@ def resize_image(
     interpolation: str = Body("linear")
 ):
     try:
-        img = base64_to_image(image)
-        if img is None or img.size == 0:
-            return {"error": "Failed to decode input image"}
-
+        # Input validation
+        if not image:
+            return {"error": "No image data provided"}
+        
         if width <= 0 or height <= 0:
-            return {"error": "width and height must be positive integers"}
+            return {"error": "Width and height must be positive integers"}
 
+        # Process image
+        img = base64_to_image(image)
         interp = _interp_from_name(interpolation)
         out = cv2.resize(img, (int(width), int(height)), interpolation=interp)
-        return {"image": image_to_base64(out)}
+        
+        # Convert back to base64
+        result = image_to_base64(out)
+        return {"image": result}
     except Exception as e:
-        return {"error": f"Error resizing image: {str(e)}"}
+        return {"error": f"Error processing image: {str(e)}"}
