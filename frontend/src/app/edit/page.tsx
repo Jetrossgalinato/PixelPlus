@@ -11,21 +11,20 @@ import DrawingTool from "../components/DrawingTool";
 import TranslationTool from "../components/TranslationTool";
 import RotationTool from "../components/RotationTool";
 import ResizeCropTool from "../components/ResizeCropTool";
+import ArithmeticBitwiseTool from "../components/ArithmeticBitwiseTool";
+
 import { useImage } from "../ImageContext";
 
 export default function EditPage() {
   const router = useRouter();
   const { image } = useImage();
-  const [processing] = useState(false); // retained for future multi-tool orchestration
-  // Legacy slider state removed; combined tool manages its own modal
+  const [processing] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const prevResultUrl = useRef<string | null>(null);
-  // Track when undo button is clicked, to ensure sliders are always closed
   const isUndoClicked = useRef(false);
-  // Keep track of all blob URLs created during this session to prevent revocation of URLs in use
   const createdBlobUrls = useRef<Set<string>>(new Set());
-  // Track both image and slider states
+  
   const [undoStack, setUndoStack] = useState<
     {
       url: string;
@@ -39,16 +38,21 @@ export default function EditPage() {
         | "rotation-transform"
         | "resize"
         | "interpolation"
-        | "crop"; // Track which tool was last used
+        | "crop"
+        | "arithmetic"
+        | "bitwise";
     }[]
-  >([]); // For resetting to original
+  >([]);
+  
   const [translationVals, setTranslationVals] = useState<{
     x: number;
     y: number;
   }>({ x: 0, y: 0 });
+  
   const [rotationVal, setRotationVal] = useState<{ angle: number }>({
     angle: 0,
   });
+  
   const [editHistory, setEditHistory] = useState<
     {
       url: string;
@@ -64,19 +68,26 @@ export default function EditPage() {
         | "rotation-transform"
         | "resize"
         | "interpolation"
-        | "crop"; // Track which tool was last used
+        | "crop"
+        | "arithmetic"
+        | "bitwise";
     }[]
-  >([]); // For step-by-step undo
-  // Keep last-applied HSV/RGB values for history (optional)
+  >([]);
+  
   const [hsvSlider, setHsvSlider] = useState({ h: 0, s: 1, v: 1 });
   const [rgbSlider, setRgbSlider] = useState({ r: 1, g: 1, b: 1 });
 
-  // Track active modal to hide other anchors
   const [activeModal, setActiveModal] = useState<
-    null | "color" | "hsv" | "rgb" | "translation" | "rotation" | "resize"
+    | null
+    | "color"
+    | "hsv"
+    | "rgb"
+    | "translation"
+    | "rotation"
+    | "resize"
+    | "arithmetic"
   >(null);
 
-  // Restore edit preview from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem("pixelplus-edit-preview");
     if (saved) {
@@ -85,13 +96,9 @@ export default function EditPage() {
     setUndoStack([]);
     setHsvSlider({ h: 0, s: 1, v: 1 });
   }, [image.dataUrl, image.fileName]);
-  // Removed unused showComparison for performance cleanliness
+  
   const [error] = useState<string | null>(null);
 
-  // For resetting RGB sliders on Undo
-  // Removed individual tool reset signals (managed by combined modal)
-
-  // Receive grayscale or RGB/HSV result from tool component
   const handleEditResult = useCallback(
     (
       url: string,
@@ -106,7 +113,9 @@ export default function EditPage() {
           | "scale"
           | "resize"
           | "interpolation"
-          | "crop";
+          | "crop"
+          | "arithmetic"
+          | "bitwise";
         values:
           | { h: number; s: number; v: number }
           | { r: number; g: number; b: number }
@@ -116,13 +125,12 @@ export default function EditPage() {
           | { sx: number; sy: number; interp: string }
           | { w: number; h: number; interp: string }
           | { method: string }
-          | { x: number; y: number; w: number; h: number };
+          | { x: number; y: number; w: number; h: number }
+          | { operation: string; weight1?: number; weight2?: number; scale?: number };
       }
     ) => {
-      // Debug information
       console.log(`Received new edit result URL: ${url}`);
 
-      // Track blob URLs to prevent premature revocation
       if (url.startsWith("blob:")) {
         createdBlobUrls.current.add(url);
         console.log(
@@ -130,15 +138,12 @@ export default function EditPage() {
         );
       }
 
-      // Save current result and slider state to history before applying new edit
       if (result) {
-        // Determine which tool is currently being used, if any
         const currentTool = sliderValues?.type;
         console.log(
           `Adding current result to history: ${result}, tool: ${currentTool}`
         );
 
-        // Make sure we handle the tool type properly (scale is now removed)
         const toolType = currentTool === "scale" ? "resize" : currentTool;
 
         setEditHistory((prev) => [
@@ -148,19 +153,16 @@ export default function EditPage() {
             hsv: hsvSlider,
             rgb: rgbSlider,
             translation: translationVals,
-            // If last tool was rotation with transform op, we store as-is; angle is meaningful for typed rotation
             rotation:
               sliderValues?.type === "rotation" ? rotationVal : undefined,
-            lastTool: toolType, // Track which tool was used
+            lastTool: toolType,
           },
         ]);
       } else if (originalForUndo) {
-        // If this is the first edit, save original
         console.log(
           `First edit, saving original to undo stack: ${originalForUndo}`
         );
 
-        // Make sure we handle the tool type properly (scale is now removed)
         const toolType =
           sliderValues?.type === "scale" ? "resize" : sliderValues?.type;
 
@@ -174,16 +176,11 @@ export default function EditPage() {
         ]);
       }
 
-      // Update the appropriate slider state based on the tool used
       if (sliderValues) {
         if (sliderValues.type === "hsv") {
-          setHsvSlider(
-            sliderValues.values as { h: number; s: number; v: number }
-          );
+          setHsvSlider(sliderValues.values as { h: number; s: number; v: number });
         } else if (sliderValues.type === "rgb") {
-          setRgbSlider(
-            sliderValues.values as { r: number; g: number; b: number }
-          );
+          setRgbSlider(sliderValues.values as { r: number; g: number; b: number });
         } else if (sliderValues.type === "translation") {
           setTranslationVals(sliderValues.values as { x: number; y: number });
         } else if (sliderValues.type === "rotation") {
@@ -192,9 +189,11 @@ export default function EditPage() {
           sliderValues.type === "scale" ||
           sliderValues.type === "resize" ||
           sliderValues.type === "interpolation" ||
-          sliderValues.type === "crop"
+          sliderValues.type === "crop" ||
+          sliderValues.type === "arithmetic" ||
+          sliderValues.type === "bitwise"
         ) {
-          // No additional local UI state to sync for these right now
+          // No additional local UI state to sync for these
         }
       }
 
@@ -203,10 +202,7 @@ export default function EditPage() {
     [result, hsvSlider, rgbSlider, translationVals, rotationVal]
   );
 
-  // Back to default (original) handler
   const handleBackToDefault = useCallback(() => {
-    // Close any open modals
-
     if (undoStack.length > 0) {
       setResult(undoStack[0].url);
       setHsvSlider(undoStack[0].hsv);
@@ -219,7 +215,7 @@ export default function EditPage() {
       setRotationVal({ angle: 0 });
       setUndoStack([]);
     } else if (image.dataUrl) {
-      setResult(null); // will show original placeholder
+      setResult(null);
       setHsvSlider({ h: 0, s: 1, v: 1 });
       setRgbSlider({ r: 1, g: 1, b: 1 });
       setTranslationVals({ x: 0, y: 0 });
@@ -229,26 +225,21 @@ export default function EditPage() {
     setActiveModal(null);
   }, [undoStack, image.dataUrl]);
 
-  // Undo last edit - goes back one step in edit history
   const undoLastEdit = useCallback(() => {
     console.log(`Undo clicked: editHistory length = ${editHistory.length}`);
-    isUndoClicked.current = true; // Set flag to indicate undo was clicked
+    isUndoClicked.current = true;
 
     if (editHistory.length > 0) {
-      // Get the previous state from history
       const newHistory = [...editHistory];
       const previousState = newHistory.pop();
 
-      // Always close any open modals before proceeding with the undo
       setActiveModal(null);
-
       setEditHistory(newHistory);
       console.log(
         `After pop: editHistory will be length = ${newHistory.length}`
       );
 
       if (previousState) {
-        // Debug information
         console.log(`Undoing to URL: ${previousState.url}`);
         console.log(
           `Previous state last tool: ${previousState.lastTool || "none"}`
@@ -267,15 +258,12 @@ export default function EditPage() {
           console.log(`Tracked URLs count: ${createdBlobUrls.current.size}`);
         }
 
-        // Validate that the URL still exists in our tracked set or is not a blob URL
         const isValidUrl =
           !previousState.url.startsWith("blob:") ||
           createdBlobUrls.current.has(previousState.url);
 
         if (isValidUrl) {
           setResult(previousState.url);
-
-          // Apply the stored slider values
           setHsvSlider(previousState.hsv);
           if (previousState.rgb) {
             setRgbSlider(previousState.rgb);
@@ -290,11 +278,8 @@ export default function EditPage() {
           } else {
             setRotationVal({ angle: 0 });
           }
-
-          // Close any open modals to avoid interfering with future undos
           setActiveModal(null);
         } else {
-          // Fallback to original image if URL is invalid
           console.warn(
             "Invalid URL detected in history, falling back to original"
           );
@@ -313,7 +298,6 @@ export default function EditPage() {
             setTranslationVals({ x: 0, y: 0 });
             setRotationVal({ angle: 0 });
           }
-          // No UI resets needed here; combined modal manages internal state
         }
       } else if (undoStack.length > 0) {
         setResult(undoStack[0].url);
@@ -323,7 +307,6 @@ export default function EditPage() {
         }
         setTranslationVals({ x: 0, y: 0 });
         setRotationVal({ angle: 0 });
-        // Close any open modals
         setActiveModal(null);
       } else {
         setResult(null);
@@ -331,7 +314,6 @@ export default function EditPage() {
         setRgbSlider({ r: 1, g: 1, b: 1 });
         setTranslationVals({ x: 0, y: 0 });
         setRotationVal({ angle: 0 });
-        // Close any open modals
         setActiveModal(null);
       }
     } else if (result) {
@@ -339,26 +321,21 @@ export default function EditPage() {
     }
   }, [editHistory, result, undoStack, handleBackToDefault, image.dataUrl]);
 
-  // Add effect for result tracking
   useEffect(() => {
     if (result && result.startsWith("blob:")) {
       prevResultUrl.current = result;
     }
 
-    // If this was triggered by an undo action, ensure sliders are closed
     if (isUndoClicked.current) {
       isUndoClicked.current = false;
     }
   }, [result]);
 
-  // Cleanup object URLs on unmount
   useEffect(() => {
-    // Capture the current value of the ref at the time the effect runs
     const currentUrls = new Set(createdBlobUrls.current);
     const urlAtMount = prevResultUrl.current;
 
     return () => {
-      // Cleanup URLs using the captured set
       currentUrls.forEach((url) => {
         try {
           URL.revokeObjectURL(url);
@@ -367,7 +344,6 @@ export default function EditPage() {
         }
       });
 
-      // Also cleanup the initial URL if it exists
       if (urlAtMount) {
         try {
           URL.revokeObjectURL(urlAtMount);
@@ -378,12 +354,10 @@ export default function EditPage() {
     };
   }, []);
 
-  // Export handlers
   const handleExport = (type: "png" | "jpg" | "pdf") => {
     if (!result) return;
     alert("Download started!");
     if (type === "pdf") {
-      // Export both images to PDF
       import("jspdf").then((jsPDFModule) => {
         const jsPDF = jsPDFModule.default;
         const doc = new jsPDF();
@@ -398,13 +372,11 @@ export default function EditPage() {
         doc.save("comparison.pdf");
       });
     } else {
-      // Download the edited image as PNG or JPG
       const link = document.createElement("a");
       link.href = result;
       link.download = `edited.${type}`;
       link.click();
     }
-    // keep modal open so user can export multiple formats; optional: auto-close
   };
 
   return (
@@ -413,7 +385,6 @@ export default function EditPage() {
         className="fixed top-0 left-0 h-screen w-[260px] min-w-[260px] bg-white/70 dark:bg-gray-900/70 border-r border-gray-200 dark:border-gray-800 flex flex-col items-start py-8 gap-0 shadow-xl z-10 backdrop-blur-md"
         style={{ boxShadow: "0 4px 32px 0 rgba(0,0,0,0.10)", height: "100vh" }}
       >
-        {/* Back button at very top, left-aligned */}
         <button
           className="flex items-center gap-2 px-3 py-2 text-white hover:text-gray-200 font-medium mb-6 w-10 h-10 justify-start rounded-full hover:bg-blue-50 dark:hover:bg-blue-900 transition ml-4"
           onClick={() => router.push("/")}
@@ -422,15 +393,12 @@ export default function EditPage() {
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        {/* Sidebar label */}
         <div className="w-full px-4 mb-6">
           <span className="text-xs font-semibold tracking-widest text-gray-500 dark:text-gray-400 uppercase">
             Tools
           </span>
         </div>
-        {/* Tools, all left-aligned */}
         <div className="w-full flex flex-col items-start gap-3 px-4">
-          {/* Combined Color Tool Button (HSV + RGB + Grayscale) */}
           <div className="w-full flex flex-col items-start">
             <CombinedColorTool
               imageDataUrl={result || image.dataUrl}
@@ -442,9 +410,7 @@ export default function EditPage() {
               rgbValues={rgbSlider}
             />
           </div>
-          {/* Divider */}
           <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
-          {/* Drawing Tool Button */}
           <div className="w-full flex flex-col items-start">
             <DrawingTool
               imageDataUrl={result || image.dataUrl}
@@ -453,9 +419,7 @@ export default function EditPage() {
               onDrawingChange={setIsDrawing}
             />
           </div>
-          {/* Divider */}
           <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
-          {/* Resize/Crop Tool Button */}
           <div className="w-full flex flex-col items-start">
             <ResizeCropTool
               imageDataUrl={result || image.dataUrl}
@@ -464,9 +428,7 @@ export default function EditPage() {
               onOpenChange={(open) => setActiveModal(open ? "resize" : null)}
             />
           </div>
-          {/* Divider */}
           <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
-          {/* Translation Tool Button */}
           <div className="w-full flex flex-col items-start">
             <TranslationTool
               imageDataUrl={result || image.dataUrl}
@@ -478,9 +440,7 @@ export default function EditPage() {
               translationValues={translationVals}
             />
           </div>
-          {/* Divider */}
           <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
-          {/* Rotation Tool Button */}
           <div className="w-full flex flex-col items-start">
             <RotationTool
               imageDataUrl={result || image.dataUrl}
@@ -490,27 +450,32 @@ export default function EditPage() {
               rotationValues={rotationVal}
             />
           </div>
-          {/* Divider */}
           <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          <div className="w-full flex flex-col items-start">
+            <ArithmeticBitwiseTool
+              imageDataUrl={result || image.dataUrl}
+              onResult={handleEditResult}
+              disabled={processing || !(result || image.dataUrl)}
+              onOpenChange={(open) =>
+                setActiveModal(open ? "arithmetic" : null)
+              }
+            />
+          </div>
         </div>
-        {/* Spacer to push content to top */}
         <div className="flex-1" />
       </aside>
-      {/* Main content area shifted right */}
       <main
         className="flex-1 flex flex-col items-center px-8 py-8"
         style={{ marginLeft: 260 }}
       >
-        {/* All tool modal anchors - positioned on the right side (always present) */}
         <>
-          {/* Combined Color modal anchor */}
           <div
             id="color-modal-anchor"
             className={`absolute z-[110] ${
               isDrawing ? "pointer-events-none" : ""
             }`}
             style={{
-              right: "32px", // move modal further right (was right-8 = 2rem)
+              right: "32px",
               top: "150px",
               minWidth: "380px",
               minHeight: "180px",
@@ -518,7 +483,6 @@ export default function EditPage() {
                 activeModal && activeModal !== "color" ? "none" : undefined,
             }}
           ></div>
-          {/* Resize/Crop modal anchor */}
           <div
             id="resize-crop-modal-anchor"
             className={`absolute right-8 z-[110] ${
@@ -532,7 +496,6 @@ export default function EditPage() {
                 activeModal && activeModal !== "resize" ? "none" : undefined,
             }}
           ></div>
-          {/* Translation modal anchor */}
           <div
             id="translation-modal-anchor"
             className={`absolute right-8 z-[110] ${
@@ -548,7 +511,6 @@ export default function EditPage() {
                   : undefined,
             }}
           ></div>
-          {/* Rotation modal anchor */}
           <div
             id="rotation-modal-anchor"
             className={`absolute right-8 z-[110] ${
@@ -562,8 +524,22 @@ export default function EditPage() {
                 activeModal && activeModal !== "rotation" ? "none" : undefined,
             }}
           ></div>
+          <div
+            id="arithmetic-modal-anchor"
+            className={`absolute right-8 z-[110] ${
+              isDrawing ? "pointer-events-none" : ""
+            }`}
+            style={{
+              top: "150px",
+              minWidth: "400px",
+              minHeight: "180px",
+              display:
+                activeModal && activeModal !== "arithmetic"
+                  ? "none"
+                  : undefined,
+            }}
+          ></div>
         </>
-        {/* Undo and Export buttons at top corners */}
         <div className="w-full flex justify-between items-start mb-2">
           <UndoButton
             onClick={undoLastEdit}
@@ -582,7 +558,6 @@ export default function EditPage() {
         <h1 className="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-gray-100">
           Edit Image
         </h1>
-        {/* Single large edit preview */}
         <div className="flex flex-col items-center w-full max-w-4xl mt-4">
           {result ? (
             <Image
@@ -620,8 +595,6 @@ export default function EditPage() {
         )}
         {error && <div className="mt-2 text-xs text-red-500">{error}</div>}
       </main>
-
-      {/* Export modal is now handled inside ExportButton */}
     </div>
   );
 }

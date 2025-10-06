@@ -9,6 +9,7 @@ from api_rotation import router as rotation_router
 from api_resize import router as resize_router
 from api_interpolation import router as interpolation_router
 from api_crop import router as crop_router
+from api_arithmetic import router as arithmetic_router
     
 app = FastAPI()
 
@@ -33,6 +34,8 @@ app.include_router(rotation_router)
 app.include_router(resize_router)
 app.include_router(interpolation_router)
 app.include_router(crop_router)
+app.include_router(arithmetic_router)
+
 
 @app.get("/")
 def read_root():
