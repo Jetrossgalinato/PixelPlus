@@ -43,15 +43,20 @@ def resize_image(
     interpolation: str = Body("linear")
 ):
     try:
-        img = base64_to_image(image)
-        if img is None or img.size == 0:
-            return {"error": "Failed to decode input image"}
-
+        # Input validation
+        if not image:
+            return {"error": "No image data provided"}
+        
         if width <= 0 or height <= 0:
-            return {"error": "width and height must be positive integers"}
+            return {"error": "Width and height must be positive integers"}
 
+        # Process image
+        img = base64_to_image(image)
         interp = _interp_from_name(interpolation)
         out = cv2.resize(img, (int(width), int(height)), interpolation=interp)
-        return {"image": image_to_base64(out)}
+        
+        # Convert back to base64
+        result = image_to_base64(out)
+        return {"image": result}
     except Exception as e:
-        return {"error": f"Error resizing image: {str(e)}"}
+        return {"error": f"Error processing image: {str(e)}"}
