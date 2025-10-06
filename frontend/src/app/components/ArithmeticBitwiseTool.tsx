@@ -1,3 +1,4 @@
+//ArithmeticBitwiseTool.tsx
 "use client";
 import { useState } from "react";
 import ReactDOM from "react-dom";
@@ -367,19 +368,19 @@ export default function ArithmeticBitwiseTool({
       </button>
 
       {showModal && (
-        <>
-          <div className="fixed inset-0 z-[100]" onClick={closeModal} />
-          {typeof window !== "undefined" &&
-          document.getElementById("resize-crop-modal-anchor")
-            ? ReactDOM.createPortal(
-                <div className="z-[120] relative">{modal}</div>,
-                document.getElementById(
-                  "resize-crop-modal-anchor"
-                ) as HTMLElement
-              )
-            : null}
-        </>
-      )}
+  <>
+    <div className="fixed inset-0 z-[100]" onClick={closeModal} />
+    {typeof window !== "undefined" &&
+    document.getElementById("arithmetic-modal-anchor")
+      ? ReactDOM.createPortal(
+          <div className="z-[120] relative">{modal}</div>,
+          document.getElementById(
+            "arithmetic-modal-anchor"
+          ) as HTMLElement
+        )
+      : null}
+  </>
+)}
     </div>
   );
 }
