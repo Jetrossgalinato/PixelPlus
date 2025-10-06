@@ -44,9 +44,13 @@ export const applyInterpolation = async (
   method: InterpMethod,
   opts: { width: number; height: number } | { scale_x: number; scale_y: number }
 ): Promise<string> => {
+  const imageData = imageBase64.startsWith('data:image/')
+    ? imageBase64
+    : `data:image/png;base64,${imageBase64}`;
+
   const data = await postJson<{ image: string }>(
     `${API_BASE_URL}/interpolation`,
-    { image: imageBase64, method, ...opts }
+    { image: imageData, method, ...opts }
   );
   return data.image;
 };
