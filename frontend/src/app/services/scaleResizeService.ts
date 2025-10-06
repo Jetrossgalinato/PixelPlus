@@ -59,8 +59,12 @@ export const cropImage = async (
   height: number,
   clamp: boolean = true
 ): Promise<string> => {
+  const imageData = imageBase64.startsWith('data:image/')
+    ? imageBase64
+    : `data:image/png;base64,${imageBase64}`;
+
   const data = await postJson<{ image: string }>(`${API_BASE_URL}/crop`, {
-    image: imageBase64,
+    image: imageData,
     x,
     y,
     width,
