@@ -4,12 +4,29 @@ export type ArithmeticOperation = "add" | "subtract" | "multiply" | "divide";
 export type BitwiseOperation = "and" | "or" | "xor" | "not";
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
+  console.log('Sending request to:', url);
+  console.log('Request body:', body);
+  
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  
+  if (!res.ok) {
+    let errorMessage = `${res.status} ${res.statusText}`;
+    try {
+      const errorData = await res.json();
+      console.error('Error response:', errorData);
+      if (errorData.detail) {
+        errorMessage += `: ${JSON.stringify(errorData.detail)}`;
+      }
+    } catch {
+      // If parsing fails, use the basic error
+    }
+    throw new Error(errorMessage);
+  }
+  
   const data = await res.json();
   if (data.error) throw new Error(data.error);
   return data as T;
