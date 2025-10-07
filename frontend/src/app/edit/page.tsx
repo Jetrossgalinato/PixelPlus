@@ -1,4 +1,3 @@
-//page.tsx
 "use client";
 import Image from "next/image";
 
@@ -13,6 +12,7 @@ import TranslationTool from "../components/TranslationTool";
 import RotationTool from "../components/RotationTool";
 import ResizeCropTool from "../components/ResizeCropTool";
 import ArithmeticBitwiseTool from "../components/ArithmeticBitwiseTool";
+import ConvolutionTool from "../components/ConvolutionTool";
 
 import { useImage } from "../ImageContext";
 
@@ -41,7 +41,10 @@ export default function EditPage() {
         | "interpolation"
         | "crop"
         | "arithmetic"
-        | "bitwise";
+        | "bitwise"
+        | "convolution"
+        | "blur"
+        | "sharpen";
     }[]
   >([]);
   
@@ -71,7 +74,10 @@ export default function EditPage() {
         | "interpolation"
         | "crop"
         | "arithmetic"
-        | "bitwise";
+        | "bitwise"
+        | "convolution"
+        | "blur"
+        | "sharpen";
     }[]
   >([]);
   
@@ -87,6 +93,7 @@ export default function EditPage() {
     | "rotation"
     | "resize"
     | "arithmetic"
+    | "convolution"
   >(null);
 
   useEffect(() => {
@@ -116,7 +123,10 @@ export default function EditPage() {
           | "interpolation"
           | "crop"
           | "arithmetic"
-          | "bitwise";
+          | "bitwise"
+          | "convolution"
+          | "blur"
+          | "sharpen";
         values:
           | { h: number; s: number; v: number }
           | { r: number; g: number; b: number }
@@ -127,7 +137,11 @@ export default function EditPage() {
           | { w: number; h: number; interp: string }
           | { method: string }
           | { x: number; y: number; w: number; h: number }
-          | { operation: string; weight1?: number; weight2?: number; scale?: number };
+          | { operation: string; weight1?: number; weight2?: number; scale?: number }
+          | { blurType?: string; blurSize?: number }
+          | { sharpenIntensity?: number; unsharpAmount?: number; unsharpRadius?: number }
+          | { effect?: string; method?: string }
+          | { kernel?: number[][]; normalize?: boolean };
       }
     ) => {
       console.log(`Received new edit result URL: ${url}`);
@@ -186,15 +200,6 @@ export default function EditPage() {
           setTranslationVals(sliderValues.values as { x: number; y: number });
         } else if (sliderValues.type === "rotation") {
           setRotationVal(sliderValues.values as { angle: number });
-        } else if (
-          sliderValues.type === "scale" ||
-          sliderValues.type === "resize" ||
-          sliderValues.type === "interpolation" ||
-          sliderValues.type === "crop" ||
-          sliderValues.type === "arithmetic" ||
-          sliderValues.type === "bitwise"
-        ) {
-          // No additional local UI state to sync for these
         }
       }
 
@@ -399,7 +404,7 @@ export default function EditPage() {
             Tools
           </span>
         </div>
-        <div className="w-full flex flex-col items-start gap-3 px-4">
+        <div className="w-full flex flex-col items-start gap-3 px-4 overflow-y-auto flex-1">
           <div className="w-full flex flex-col items-start">
             <CombinedColorTool
               imageDataUrl={result || image.dataUrl}
@@ -418,6 +423,15 @@ export default function EditPage() {
               onResult={handleEditResult}
               disabled={processing || !(result || image.dataUrl)}
               onDrawingChange={setIsDrawing}
+            />
+          </div>
+          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          <div className="w-full flex flex-col items-start">
+            <ConvolutionTool
+              imageDataUrl={result || image.dataUrl}
+              onResult={handleEditResult}
+              disabled={processing || !(result || image.dataUrl)}
+              onOpenChange={(open) => setActiveModal(open ? "convolution" : null)}
             />
           </div>
           <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
@@ -463,7 +477,6 @@ export default function EditPage() {
             />
           </div>
         </div>
-        <div className="flex-1" />
       </aside>
       <main
         className="flex-1 flex flex-col items-center px-8 py-8"
@@ -482,6 +495,19 @@ export default function EditPage() {
               minHeight: "180px",
               display:
                 activeModal && activeModal !== "color" ? "none" : undefined,
+            }}
+          ></div>
+          <div
+            id="convolution-modal-anchor"
+            className={`absolute right-8 z-[110] ${
+              isDrawing ? "pointer-events-none" : ""
+            }`}
+            style={{
+              top: "150px",
+              minWidth: "480px",
+              minHeight: "180px",
+              display:
+                activeModal && activeModal !== "convolution" ? "none" : undefined,
             }}
           ></div>
           <div
