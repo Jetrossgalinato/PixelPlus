@@ -36,23 +36,10 @@ app.include_router(resize_router)
 app.include_router(interpolation_router)
 app.include_router(crop_router)
 app.include_router(arithmetic_router)
-app.include_router(convolution_router)
+app.include_router(convolution_router)  
 
 
 @app.get("/")
 def read_root():
     return {"message": "Welcome to PixelPlus Backend!"}
 
-
-# Optional: List all routes for debugging
-@app.get("/routes")
-def list_routes():
-    """List all registered routes"""
-    routes = []
-    for route in app.routes:
-        if hasattr(route, "methods"):
-            routes.append({
-                "path": route.path,
-                "methods": list(route.methods)
-            })
-    return {"routes": routes}

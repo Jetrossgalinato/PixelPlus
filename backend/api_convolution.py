@@ -234,7 +234,7 @@ def apply_edge_detection(
 
 @router.post("/convolution/emboss")
 def apply_emboss(
-    image: str = Body(...)
+    image: str = Body(..., embed=True)
 ):
     """
     Apply emboss effect to the image
