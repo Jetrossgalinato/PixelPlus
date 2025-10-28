@@ -8,7 +8,7 @@ import {
   applyOpening,
   applyClosing,
   applyCannyEdgeDetection,
-} from "../services/morphologyServices";
+} from "../services/morphologyService";
 
 interface MorphologyToolProps {
   imageDataUrl: string | null;
