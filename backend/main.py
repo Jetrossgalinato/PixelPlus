@@ -13,6 +13,10 @@ from api_interpolation import router as interpolation_router
 from api_crop import router as crop_router
 from api_arithmetic import router as arithmetic_router
 from api_convolution import router as convolution_router
+from api_threshold import router as threshold_router
+from api_morphology import router as morphology_router
+
+
     
 app = FastAPI()
 
@@ -37,9 +41,13 @@ app.include_router(interpolation_router)
 app.include_router(crop_router)
 app.include_router(arithmetic_router)
 app.include_router(convolution_router)  
+app.include_router(threshold_router)
+app.include_router(morphology_router)
+
 
 
 @app.get("/")
 def read_root():
     return {"message": "Welcome to PixelPlus Backend!"}
 
+    

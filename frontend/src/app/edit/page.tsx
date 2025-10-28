@@ -13,6 +13,8 @@ import RotationTool from "../components/RotationTool";
 import ResizeCropTool from "../components/ResizeCropTool";
 import ArithmeticBitwiseTool from "../components/ArithmeticBitwiseTool";
 import ConvolutionTool from "../components/ConvolutionTool";
+import ThresholdTool from "../components/ThresholdTool";
+import MorphologyTool from "../components/MorphologyTool";
 
 import { useImage } from "../ImageContext";
 
@@ -44,7 +46,9 @@ export default function EditPage() {
         | "bitwise"
         | "convolution"
         | "blur"
-        | "sharpen";
+        | "sharpen"
+        | "threshold"
+        | "morphology";
     }[]
   >([]);
   
@@ -77,7 +81,9 @@ export default function EditPage() {
         | "bitwise"
         | "convolution"
         | "blur"
-        | "sharpen";
+        | "sharpen"
+        | "threshold"
+        | "morphology";
     }[]
   >([]);
   
@@ -94,6 +100,8 @@ export default function EditPage() {
     | "resize"
     | "arithmetic"
     | "convolution"
+    | "threshold"
+    | "morphology"
   >(null);
 
   useEffect(() => {
@@ -126,7 +134,9 @@ export default function EditPage() {
           | "bitwise"
           | "convolution"
           | "blur"
-          | "sharpen";
+          | "sharpen"
+          | "threshold"
+          | "morphology";
         values:
           | { h: number; s: number; v: number }
           | { r: number; g: number; b: number }
@@ -141,7 +151,9 @@ export default function EditPage() {
           | { blurType?: string; blurSize?: number }
           | { sharpenIntensity?: number; unsharpAmount?: number; unsharpRadius?: number }
           | { effect?: string; method?: string }
-          | { kernel?: number[][]; normalize?: boolean };
+          | { kernel?: number[][]; normalize?: boolean }
+          | { thresholdType?: string; thresholdValue?: number; maxValue?: number; adaptiveMethod?: string; blockSize?: number; cConstant?: number }
+          | { operation?: string; kernelSize?: number; kernelShape?: string; iterations?: number; threshold1?: number; threshold2?: number };
       }
     ) => {
       console.log(`Received new edit result URL: ${url}`);
@@ -436,6 +448,24 @@ export default function EditPage() {
           </div>
           <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
           <div className="w-full flex flex-col items-start">
+            <ThresholdTool
+              imageDataUrl={result || image.dataUrl}
+              onResult={handleEditResult}
+              disabled={processing || !(result || image.dataUrl)}
+              onOpenChange={(open) => setActiveModal(open ? "threshold" : null)}
+            />
+          </div>
+          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          <div className="w-full flex flex-col items-start">
+            <MorphologyTool
+              imageDataUrl={result || image.dataUrl}
+              onResult={handleEditResult}
+              disabled={processing || !(result || image.dataUrl)}
+              onOpenChange={(open) => setActiveModal(open ? "morphology" : null)}
+            />
+          </div>
+          <div className="w-40 border-b border-gray-200 dark:border-gray-700 my-2 opacity-60 ml-1" />
+          <div className="w-full flex flex-col items-start">
             <ResizeCropTool
               imageDataUrl={result || image.dataUrl}
               onResult={handleEditResult}
@@ -508,6 +538,32 @@ export default function EditPage() {
               minHeight: "180px",
               display:
                 activeModal && activeModal !== "convolution" ? "none" : undefined,
+            }}
+          ></div>
+          <div
+            id="threshold-modal-anchor"
+            className={`absolute right-8 z-[110] ${
+              isDrawing ? "pointer-events-none" : ""
+            }`}
+            style={{
+              top: "150px",
+              minWidth: "420px",
+              minHeight: "180px",
+              display:
+                activeModal && activeModal !== "threshold" ? "none" : undefined,
+            }}
+          ></div>
+          <div
+            id="morphology-modal-anchor"
+            className={`absolute right-8 z-[110] ${
+              isDrawing ? "pointer-events-none" : ""
+            }`}
+            style={{
+              top: "150px",
+              minWidth: "420px",
+              minHeight: "180px",
+              display:
+                activeModal && activeModal !== "morphology" ? "none" : undefined,
             }}
           ></div>
           <div
